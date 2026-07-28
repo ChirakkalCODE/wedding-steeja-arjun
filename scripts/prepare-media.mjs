@@ -22,7 +22,8 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SOURCE = resolve(root, 'src/assets/photos/EPW09695.jpg');
+const HERO = resolve(root, 'src/assets/photos/EPW09695.jpg');
+const STORY = resolve(root, 'src/assets/photos/EPW00926.jpg');
 
 /** Widest entry in the page's `widths` array — see src/lib/hero-media.ts. */
 const MAX_WIDTH = 1920;
@@ -38,6 +39,18 @@ const MAX_WIDTH = 1920;
  */
 const OUTPUTS = [
   {
+    source: STORY,
+    file: 'src/assets/photos/EPW00926-4x5.jpg',
+    // Our Story renders at aspect-ratio 4/5, so the master is cut to 4:5 and
+    // `object-fit: cover` never has to throw pixels away. 900 keeps headroom
+    // above his hair and lands the bottom edge just above the burnt-in studio
+    // watermark — the credit is given in the caption instead.
+    crop: { left: 0, top: 900, width: 5760, height: 7200 },
+    out: { width: MAX_WIDTH, height: 2400 },
+    encode: { quality: 94, chromaSubsampling: '4:4:4' },
+  },
+  {
+    source: HERO,
     file: 'src/assets/photos/EPW09695-wide.jpg',
     // Full frame, uncropped.
     crop: { left: 0, top: 0, width: 5760, height: 8640 },
@@ -47,6 +60,7 @@ const OUTPUTS = [
     encode: { quality: 94, chromaSubsampling: '4:4:4' },
   },
   {
+    source: HERO,
     file: 'src/assets/photos/EPW09695-phone.jpg',
     // 4:5 — 5760x7200 leaves 1440px of vertical play; 900 keeps the bird
     // above them and her sandals just inside the bottom edge.
@@ -55,6 +69,7 @@ const OUTPUTS = [
     encode: { quality: 94, chromaSubsampling: '4:4:4' },
   },
   {
+    source: HERO,
     file: 'public/og-steeja-arjun.jpg',
     // 1.905:1 pulled in around the two of them.
     crop: { left: 470, top: 2500, width: 4820, height: 2530 },
@@ -65,21 +80,22 @@ const OUTPUTS = [
   },
 ];
 
-const meta = await sharp(SOURCE).metadata();
-console.log(`source  ${meta.width}x${meta.height}`);
-
-if (meta.width !== 5760 || meta.height !== 8640) {
-  throw new Error(
-    `Expected a 5760x8640 original, got ${meta.width}x${meta.height}. ` +
-      'The crop windows above are hard-coded to that frame — re-measure them.',
-  );
+for (const source of new Set(OUTPUTS.map((o) => o.source))) {
+  const meta = await sharp(source).metadata();
+  console.log(`source  ${source.split('/').pop()}  ${meta.width}x${meta.height}`);
+  if (meta.width !== 5760 || meta.height !== 8640) {
+    throw new Error(
+      `Expected a 5760x8640 original, got ${meta.width}x${meta.height}. ` +
+        'The crop windows above are hard-coded to that frame — re-measure them.',
+    );
+  }
 }
 
-for (const { file, crop, out, encode } of OUTPUTS) {
+for (const { source, file, crop, out, encode } of OUTPUTS) {
   const target = resolve(root, file);
   await mkdir(dirname(target), { recursive: true });
 
-  const info = await sharp(SOURCE)
+  const info = await sharp(source)
     .extract(crop)
     .resize(out.width, out.height, { fit: 'cover' })
     .jpeg({ ...encode, mozjpeg: true })

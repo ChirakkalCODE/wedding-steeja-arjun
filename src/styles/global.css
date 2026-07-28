@@ -100,3 +100,34 @@
     animation-delay: 0.2s;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Scroll reveal, for everything below the hero.
+
+   The hidden state is gated on `html.reveal`, which the inline script in
+   index.astro adds — synchronously, in the head, before first paint. That one
+   class carries two guarantees: with JavaScript unavailable the class is never
+   added and the content is simply visible, and under prefers-reduced-motion the
+   script returns before adding it, so no observer is created and nothing moves.
+   Opacity and transform only, so a reveal can never shift layout.
+--------------------------------------------------------------------------- */
+:root.reveal [data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+:root.reveal [data-reveal='2'] {
+  transition-delay: 0.08s;
+}
+
+:root.reveal [data-reveal='3'] {
+  transition-delay: 0.16s;
+}
+
+:root.reveal [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+}

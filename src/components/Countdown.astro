@@ -1,0 +1,188 @@
+---
+/**
+ * The ceremony instant, pinned to India Standard Time. Guests are spread across
+ * Switzerland and India, and a countdown that reads differently depending on
+ * where you open it is worse than no countdown — so the offset is part of the
+ * literal, not left to the visitor's clock.
+ */
+const TARGET_ISO = '2026-09-06T15:30:00+05:30';
+
+const UNITS = [
+  { key: 'days', label: 'Days' },
+  { key: 'hours', label: 'Hours' },
+  { key: 'minutes', label: 'Minutes' },
+  { key: 'seconds', label: 'Seconds' },
+] as const;
+
+/** Never negative: once the day arrives the clock rests at zero. */
+function remaining(ms: number) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  return {
+    days: Math.floor(total / 86400),
+    hours: Math.floor(total / 3600) % 24,
+    minutes: Math.floor(total / 60) % 60,
+    seconds: total % 60,
+  };
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * Rendered at build time so the first paint shows real numbers rather than a
+ * dash. The script below corrects them synchronously on its first statement,
+ * so the build-time value is never on screen for a frame the visitor can see.
+ */
+const initial = remaining(new Date(TARGET_ISO).getTime() - Date.now());
+---
+
+<section class="countdown" aria-labelledby="countdown-title">
+  <div class="countdown__inner">
+    <h2 class="countdown__label" id="countdown-title" data-reveal>
+      Counting down to the big day
+    </h2>
+
+    <!-- What a screen reader gets instead of the clock. A live region ticking
+         once a second would be unusable. -->
+    <p class="sr-only">
+      Steeja and Arjun are getting married on Sunday, 6 September 2026 at half past
+      three in the afternoon, India Standard Time.
+    </p>
+
+    <div
+      class="countdown__grid"
+      data-countdown
+      data-reveal="2"
+      aria-live="off"
+      aria-hidden="true"
+    >
+      {
+        UNITS.map(({ key, label }) => (
+          <div class="countdown__unit">
+            <span class="countdown__value" data-unit={key}>{pad(initial[key])}</span>
+            <span class="countdown__unit-label">{label}</span>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="countdown__rule" aria-hidden="true" data-reveal="3"></div>
+
+    <p class="countdown__when" data-reveal="3">Sunday, 6 September 2026 &middot; 3:30 PM</p>
+  </div>
+</section>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector('[data-countdown]');
+    if (!root) return;
+
+    var cells = {};
+    var keys = ['days', 'hours', 'minutes', 'seconds'];
+    for (var i = 0; i < keys.length; i++) {
+      cells[keys[i]] = root.querySelector('[data-unit="' + keys[i] + '"]');
+      if (!cells[keys[i]]) return;
+    }
+
+    // Same literal as the component frontmatter: an absolute instant, so every
+    // guest sees the same number whatever their device clock is set to.
+    var target = new Date('2026-09-06T15:30:00+05:30').getTime();
+    var timer;
+
+    function pad(n) {
+      return n < 10 ? '0' + n : '' + n;
+    }
+
+    function tick() {
+      var left = Math.max(0, Math.floor((target - Date.now()) / 1000));
+      cells.days.textContent = pad(Math.floor(left / 86400));
+      cells.hours.textContent = pad(Math.floor(left / 3600) % 24);
+      cells.minutes.textContent = pad(Math.floor(left / 60) % 60);
+      cells.seconds.textContent = pad(left % 60);
+      if (left === 0) clearInterval(timer);
+    }
+
+    timer = setInterval(tick, 1000);
+    tick();
+  })();
+</script>
+
+<style>
+  .countdown {
+    background-color: var(--color-shell);
+    padding-block: clamp(4rem, 9vw, 7rem);
+    padding-inline: clamp(1.5rem, 6vw, 3rem);
+  }
+
+  .countdown__inner {
+    max-width: 60rem;
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .countdown__label {
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    font-weight: 400;
+    line-height: 1.6;
+    letter-spacing: 0.28em;
+    /* Tracking is added after the last letter too; the indent recentres it. */
+    text-indent: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .countdown__grid {
+    display: grid;
+    /* Two rows on a narrow phone. `minmax(0, 1fr)` keeps the columns equal
+       whatever the digits do, so the row can never scroll sideways and the
+       layout cannot twitch when 9 days becomes 10. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(1.5rem, 4vw, 2.5rem) clamp(0.5rem, 2vw, 1.5rem);
+    margin-top: clamp(2rem, 4.5vw, 3rem);
+  }
+
+  @media (min-width: 560px) {
+    .countdown__grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .countdown__unit {
+    display: grid;
+    justify-items: center;
+    gap: 0.6rem;
+  }
+
+  .countdown__value {
+    font-family: var(--font-display);
+    font-size: clamp(2.6rem, 7vw, 4.5rem);
+    line-height: 1;
+    color: var(--color-ink);
+    /* Every digit the same width, so a ticking second never nudges anything. */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  .countdown__unit-label {
+    font-size: 0.68rem;
+    line-height: 1.4;
+    letter-spacing: 0.2em;
+    text-indent: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .countdown__rule {
+    width: 2.5rem;
+    height: 1px;
+    margin: clamp(2.25rem, 5vw, 3.25rem) auto 0;
+    background-color: var(--color-ochre);
+  }
+
+  .countdown__when {
+    margin-top: clamp(1.25rem, 2.5vw, 1.75rem);
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+</style>

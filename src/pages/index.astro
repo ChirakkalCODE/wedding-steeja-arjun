@@ -3,7 +3,9 @@ import instrumentSerif from '@fontsource/instrument-serif/files/instrument-serif
 import instrumentSerifItalic from '@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2';
 import interVariable from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2';
 
+import Countdown from '../components/Countdown.astro';
 import Hero from '../components/Hero.astro';
+import Story from '../components/Story.astro';
 import TopBar from '../components/TopBar.astro';
 import {
   heroMedia,
@@ -128,12 +130,49 @@ const fontFaces = [
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+
+    <!-- One observer for every revealing block on the page, and the class that
+         arms the hidden state. It runs here, in the head, so the hidden state is
+         in effect before first paint — set up after DOMContentLoaded instead and
+         the sections paint, then vanish, then fade back in. Bails out entirely
+         under prefers-reduced-motion: no class, no observer, nothing to undo. -->
+    <script is:inline>
+      (function () {
+        if (
+          window.matchMedia &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ) {
+          return;
+        }
+        if (!('IntersectionObserver' in window)) return;
+
+        document.documentElement.classList.add('reveal');
+
+        document.addEventListener('DOMContentLoaded', function () {
+          var observer = new IntersectionObserver(
+            function (entries) {
+              for (var i = 0; i < entries.length; i++) {
+                if (!entries[i].isIntersecting) continue;
+                entries[i].target.classList.add('is-in');
+                observer.unobserve(entries[i].target);
+              }
+            },
+            { rootMargin: '0px 0px -12% 0px', threshold: 0.05 },
+          );
+
+          var targets = document.querySelectorAll('[data-reveal]');
+          for (var i = 0; i < targets.length; i++) observer.observe(targets[i]);
+        });
+      })();
+    </script>
   </head>
 
   <body>
     <TopBar />
     <main>
       <Hero />
+      <Countdown />
+      <Story />
     </main>
   </body>
 </html>

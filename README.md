@@ -2,9 +2,10 @@
 
 One-page wedding site for 6 September 2026, Akaparambu &amp; Nedumbassery, Kerala.
 
-**Step 1 of the build: project setup and the hero only.** No other section is
-scaffolded yet. The top bar's Story / Schedule / Q&amp;A links already point at
-`#story`, `#schedule`, `#faq`, which do not exist until a later step.
+**Built so far: the hero, the countdown, and Our Story.** The top bar's Schedule
+and Q&amp;A links point at `#schedule` and `#faq`, which do not exist until a
+later step; `#story` and `#rsvp` are the two that resolve today (`#rsvp` lands
+on the story section's neighbour-to-be, so it is still a stub target).
 
 ## Running it
 
@@ -19,6 +20,14 @@ npm run dev
 | `npm run build` | `astro check` (TypeScript, strict) then a static build into `dist/` |
 | `npm run preview` | serve the built `dist/` |
 | `npm run media` | regenerate the derived photo crops — see below |
+| `npm run prune` | (runs automatically as `postbuild`) drops unreferenced files from `dist/_astro/` |
+
+`prune` exists because Astro leaves the full-size master of any image in the
+build once something reads a property off the imported object — an imported
+image is a Proxy, and `<Image>`/`<Picture>` both read `width`/`height` to size
+their fallback `<img>`. That is a megabyte in the deploy that no visitor ever
+requests. `scripts/prune-dist.mjs` collects every `_astro/…` filename mentioned
+in the built HTML/CSS/JS and deletes whatever is left over.
 
 ## Deploying
 
@@ -51,8 +60,9 @@ derives what the page actually uses:
 
 | output | what it is |
 | --- | --- |
-| `src/assets/photos/EPW09695-wide.jpg` | full 2:3 frame, 1920x2880 — used at 900px and up |
-| `src/assets/photos/EPW09695-phone.jpg` | 4:5 crop, 1920x2400 — used below 900px |
+| `src/assets/photos/EPW09695-wide.jpg` | hero, full 2:3 frame, 1920x2880 — used at 900px and up |
+| `src/assets/photos/EPW09695-phone.jpg` | hero, 4:5 crop, 1920x2400 — used below 900px |
+| `src/assets/photos/EPW00926-4x5.jpg` | Our Story, 4:5 crop, 1920x2400 |
 | `public/og-steeja-arjun.jpg` | 1200x630 landscape crop for link previews |
 
 These are committed, so CI never touches the originals. Re-run `npm run media`
@@ -77,6 +87,28 @@ component `<style>` blocks, which Tailwind does not scan, so without `static` it
 tree-shakes any token it cannot see in use — `--color-muted` silently vanished
 before this was set.
 
+## The two scripts
+
+**The countdown** (`Countdown.astro`) counts to `2026-09-06T15:30:00+05:30`. The
+IST offset is part of the literal on both sides — the frontmatter and the inline
+script use the same string — so guests in Switzerland and Kerala see the same
+number rather than one derived from their own clock. Values are rendered at build
+time and corrected synchronously by the script's first statement, so there is no
+dash to flash. It clamps at zero and clears its interval on arrival.
+
+The clock is `aria-hidden` with `aria-live="off"`: a region announcing a new
+number every second is unusable with a screen reader. A visually hidden sentence
+carries the date in prose instead.
+
+**The reveal** (`index.astro`) is one `IntersectionObserver` for both sections,
+unobserving each element as it fires. It runs in the head so the hidden state
+applies before first paint — set up on `DOMContentLoaded` instead and the
+sections paint, vanish, then fade back in. The hidden state is gated on a `reveal`
+class that the script puts on `<html>`, which buys two things for one line: with
+JavaScript unavailable the class never appears and the content is simply visible,
+and under `prefers-reduced-motion` the script returns before adding it, so no
+observer is ever created.
+
 ## Measured
 
 Chrome 150, `astro preview`, cold cache.
@@ -88,13 +120,19 @@ Chrome 150, `astro preview`, cold cache.
 | 390x844 @3 | 146.0 kB | 242.4 kB |
 | 1440x900 and above | 163.8 kB | 260.1 kB |
 
-Six requests, zero of them JavaScript. All CSS is inlined into the document, so
-there is no render-blocking stylesheet; the document is 20.1 kB raw and 5.6 kB
-on the wire.
+All CSS is inlined into the document, so there is no render-blocking stylesheet.
+The Our Story photo is lazy and below the fold, so it is not in those totals; it
+costs a further 13–37 kB depending on viewport.
+
+**JavaScript: 2.0 kB raw, 834 bytes gzipped, in zero requests.** Two inline
+scripts — the countdown clock in `Countdown.astro`, and the shared reveal
+observer in `index.astro`. No bundle, no framework, no `<script src>`.
 
 Lighthouse (mobile, default simulated throttling, three consecutive runs):
 **performance 100, accessibility 100, best practices 100, SEO 100.**
-FCP 0.64 s, LCP 1.58 s, TBT 0 ms, CLS 0.
+FCP 0.65 s, LCP 1.66 s, TBT 0 ms, **CLS 0** — measured independently too, via a
+`layout-shift` PerformanceObserver at seven viewports from 320px to 2560px,
+scrolling the full page each time.
 
 ## Where this departs from the brief
 
