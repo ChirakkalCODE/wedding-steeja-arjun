@@ -1,16 +1,65 @@
 ---
 /**
- * Sits over the hero photo with no background of its own — the hero scrim is
- * what makes it legible. Deliberately not sticky and carries no scroll
- * listener; that behaviour arrives in a later step.
+ * Fixed navigation with two states.
+ *
+ * The solid state is the CSS default and the transparent one is added by
+ * script. That inversion is deliberate: with JavaScript unavailable the bar
+ * renders solid and legible over the photograph rather than as invisible text
+ * on a busy image. Both states share identical padding and a 1px border — the
+ * hero state simply makes the border transparent — so switching cannot move a
+ * single pixel of the page.
+ *
+ * State is driven by a 1px sentinel appended to the hero by the script, never a
+ * scroll listener. The sentinel sits below the fold at rest and above it once
+ * the hero is past, so `isIntersecting` alone cannot tell the two apart; the
+ * sign of `boundingClientRect.top` is what distinguishes them.
+ *
+ * Gallery and Contact are deliberately absent from the row: at five links plus
+ * the pill it already fills the width of a small laptop, and both are reachable
+ * from the page itself.
+ *
+ * The script below is written tight rather than airy, and that is a budget
+ * decision: Astro leaves `is:inline` scripts exactly as written, so comments
+ * and indentation are shipped bytes. The whole navigation has under 2 kB to
+ * work in, so the explanation lives here, where it compiles away to nothing.
+ *
+ * What it does, in order:
+ *
+ *  1. Appends a 1px sentinel to the bottom of the hero and observes it. The
+ *     sentinel is below the fold at rest and above the viewport once the hero
+ *     is past, so `isIntersecting` is false in both cases; the sign of
+ *     `boundingClientRect.top` is what separates them. Positive means the hero
+ *     is still on screen, which adds the transparent class.
+ *
+ *  2. Scrollspy. One observer over the five linked sections with a
+ *     `-45%` inset top and bottom, so a section only counts once it reaches the
+ *     middle band of the viewport. Results are kept in a map and the first
+ *     match in document order wins, which is what guarantees that exactly one
+ *     link is ever `aria-current`.
+ *
+ *  3. The mobile dialog. `showModal()` brings focus trapping and Escape from
+ *     the platform. Body scroll is locked by pinning `position: fixed` with a
+ *     negative `top`, and every exit path — the close button, Escape, the
+ *     backdrop — funnels through the one `close` listener that unlocks,
+ *     restores the exact offset and returns focus to the hamburger. A tapped
+ *     link stores its target and closes first; the scroll happens afterwards
+ *     inside that listener, because scrolling while the body is still pinned is
+ *     what iOS Safari fights.
  */
-const links = [
+const NAV = [
   { label: 'Story', href: '#story' },
   { label: 'Schedule', href: '#schedule' },
+  { label: 'Dress code', href: '#dresscode' },
+  { label: 'Travel', href: '#travel' },
   { label: 'Q&A', href: '#faq' },
-  { label: 'Reply', href: '#rsvp' },
 ] as const;
 ---
+
+{/* Runs before the header is parsed, so the burger is never painted in the
+    state that would be wrong for it — no flash of the wrong control. */}
+<script is:inline>document.documentElement.classList.add('nav-js');</script>
+
+<a class="skip" href="#main">Skip to content</a>
 
 <!-- Deliberately NOT carrying the `rise` entrance class, and this is load-
      bearing rather than an oversight. Chrome excludes an image that covers the
@@ -21,16 +70,15 @@ const links = [
      those too — leaving the page with no LCP candidate at all, which in turn
      makes Lighthouse's default simulated run fail outright with NO_LCP rather
      than score it. Painting the wordmark immediately gives the page a real
-     first contentful element. The brief's stagger applies to the hero content;
-     animating the bar as well was an addition, not a requirement. -->
-<header class="topbar">
+     first contentful element. -->
+<header class="topbar" id="topbar">
   <p class="topbar__mark">Steeja <em>&amp;</em> Arjun</p>
 
   <nav class="topbar__nav" aria-label="Sections of this page">
     <ul class="topbar__list">
       {
-        links.map(({ label, href }) => (
-          <li class:list={['topbar__item', href === '#rsvp' && 'topbar__item--keep']}>
+        NAV.map(({ label, href }) => (
+          <li class="topbar__item">
             <a class="topbar__link" href={href}>
               {label}
             </a>
@@ -39,21 +87,171 @@ const links = [
       }
     </ul>
   </nav>
+
+  <div class="topbar__end">
+    <a class="topbar__pill" href="#rsvp">Reply</a>
+
+    <button
+      class="topbar__burger"
+      id="nav-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="nav-menu"
+      aria-label="Open menu"
+    >
+      <span class="topbar__bar"></span>
+      <span class="topbar__bar"></span>
+    </button>
+  </div>
 </header>
 
+{/* A <dialog> without `open` is display:none, so with no script this is inert
+    markup rather than a panel that can be stranded open. */}
+<dialog class="menu" id="nav-menu" aria-label="Menu">
+  <button class="menu__close" type="button" data-nav-close aria-label="Close menu">
+    <span class="menu__x"></span>
+    <span class="menu__x"></span>
+  </button>
+
+  <nav class="menu__nav" aria-label="Sections of this page">
+    <ul class="menu__list">
+      {
+        NAV.map(({ label, href }) => (
+          <li>
+            <a class="menu__link" href={href}>
+              {label}
+            </a>
+          </li>
+        ))
+      }
+      <li>
+        <a class="menu__link menu__link--reply" href="#rsvp">
+          Reply
+        </a>
+      </li>
+    </ul>
+  </nav>
+</dialog>
+
+<script is:inline>
+(function(){
+function n(){
+var b=document.getElementById('topbar');
+if(!b||!('IntersectionObserver' in window))return;
+var h=document.querySelector('main > section'),i;
+if(h){var s=document.createElement('div');s.className='topbar__sentinel';h.appendChild(s);
+new IntersectionObserver(function(e){b.classList.toggle('topbar--hero',e[0].boundingClientRect.top>0)}).observe(s)}
+var L=b.querySelectorAll('.topbar__link'),ids=[],map={},els=[];
+for(i=0;i<L.length;i++){var id=L[i].getAttribute('href').slice(1),el=document.getElementById(id);
+if(el){ids.push(id);map[id]=L[i];els.push(el)}}
+var live={},spy=new IntersectionObserver(function(es){
+for(var j=0;j<es.length;j++)live[es[j].target.id]=es[j].isIntersecting;
+var c='',k;
+for(k=0;k<ids.length;k++)if(live[ids[k]]){c=ids[k];break}
+for(k=0;k<ids.length;k++)ids[k]===c?map[ids[k]].setAttribute('aria-current','true'):map[ids[k]].removeAttribute('aria-current')
+},{rootMargin:'-45% 0px -45% 0px'});
+for(i=0;i<els.length;i++)spy.observe(els[i]);
+var m=document.getElementById('nav-menu'),t=document.getElementById('nav-toggle');
+if(!m||!t||!m.showModal)return;
+var y=0,go=null;
+t.addEventListener('click',function(){y=scrollY;m.showModal();t.setAttribute('aria-expanded','true');
+document.body.style.cssText='position:fixed;left:0;right:0;top:'+-y+'px'});
+m.addEventListener('click',function(e){if(e.target.closest('[data-nav-close]'))return m.close();
+var a=e.target.closest('a[href^="#"]');if(!a)return;e.preventDefault();go=a.getAttribute('href');m.close()});
+m.addEventListener('close',function(){document.body.style.cssText='';scrollTo({top:y,behavior:'instant'});
+t.setAttribute('aria-expanded','false');t.focus();
+if(!go)return;var d=document.querySelector(go);go=null;if(d)d.scrollIntoView()});
+}
+document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
+})();
+</script>
+
 <style>
-  .topbar {
+  :global(:root) {
+    --bar-pad-y: clamp(0.9rem, 2.2vw, 1.6rem);
+    /* Height of the tallest thing in the row: the Reply pill on a wide screen,
+       the 48px hamburger once it appears. */
+    --bar-content: 2rem;
+    /* Two paddings, that content and the hairline. Feeds the anchor offset
+       below, so no target can end up hidden behind the bar. */
+    --bar-h: calc(2 * var(--frame-inset) + 2 * var(--bar-pad-y) + var(--bar-content) + 1px);
+  }
+
+  @media (max-width: 819.98px) {
+    :global(:root) {
+      --bar-content: 3rem;
+    }
+  }
+
+  :global(main > section) {
+    scroll-margin-top: calc(var(--bar-h) + 1rem);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html) {
+      scroll-behavior: smooth;
+    }
+  }
+
+  .skip {
     position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 40;
+    padding: 0.85rem 1.25rem;
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+    font-size: 0.85rem;
+    text-decoration: none;
+    /* Off-screen rather than display:none, so it stays focusable. */
+    transform: translateY(-120%);
+    transition: transform 0.2s ease;
+  }
+
+  .skip:focus-visible {
+    transform: translateY(0);
+  }
+
+  .topbar {
+    position: fixed;
     inset: 0 0 auto 0;
-    z-index: 4;
+    z-index: 30;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 1.25rem;
-    /* Clears the invitation frame rather than crossing it. */
-    padding: calc(var(--frame-inset) + clamp(0.9rem, 2.2vw, 1.6rem))
+    /* Clears the invitation frame rather than crossing it. Identical in both
+       states — this is what keeps the switch free of layout shift. */
+    padding: calc(var(--frame-inset) + var(--bar-pad-y))
       calc(var(--frame-inset) + clamp(0.9rem, 2.4vw, 1.9rem));
+    background-color: rgb(var(--shell-rgb) / 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgb(var(--ink-rgb) / 0.12);
+    color: var(--color-ink);
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease,
+      color 0.25s ease;
+  }
+
+  .topbar--hero {
+    background-color: transparent;
+    backdrop-filter: none;
+    /* Transparent, not removed: the 1px still occupies its row. */
+    border-bottom-color: transparent;
     color: var(--color-shell);
+  }
+
+  /* Global: the script creates this element, so it never carries Astro's
+     scoping attribute and a scoped rule would not reach it — leaving an
+     unstyled div as an extra grid item in the hero. */
+  :global(.topbar__sentinel) {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
   }
 
   .topbar__mark {
@@ -83,31 +281,189 @@ const links = [
     line-height: 1.2;
     letter-spacing: 0.16em;
     text-transform: uppercase;
+    color: currentColor;
+    opacity: 0.92;
     text-decoration: none;
-    /* See the note on secondary type in Hero.astro — legibility over the
-       photograph is bought with opacity here rather than with more scrim. */
-    color: rgb(var(--shell-rgb) / 0.92);
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid transparent;
-    transition: color 0.25s ease, border-color 0.25s ease;
+    /* Underline rather than a border, so neither hover nor the active state
+       can change the row's height. */
+    text-decoration-thickness: 1px;
+    text-underline-offset: 6px;
+    transition: opacity 0.25s ease;
   }
 
   .topbar__link:hover,
   .topbar__link:focus-visible {
-    color: rgb(var(--shell-rgb) / 1);
-    border-bottom-color: rgb(var(--shell-rgb) / 0.55);
+    opacity: 1;
+    text-decoration: underline;
+    text-decoration-color: currentColor;
   }
 
-  /* Below 760px the nav collapses to the one link that matters — the others
-     return with the real navigation in a later step. */
-  @media (max-width: 759.98px) {
-    .topbar__item:not(.topbar__item--keep) {
+  .topbar__link[aria-current='true'] {
+    opacity: 1;
+    text-decoration: underline;
+    text-decoration-color: var(--color-ochre);
+  }
+
+  .topbar__end {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.6rem, 1.6vw, 1rem);
+  }
+
+  .topbar__pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1.1rem;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: currentColor;
+    transition:
+      background-color 0.25s ease,
+      color 0.25s ease;
+  }
+
+  .topbar--hero .topbar__pill:hover,
+  .topbar--hero .topbar__pill:focus-visible {
+    background-color: var(--color-shell);
+    color: var(--color-ink);
+  }
+
+  .topbar__pill:hover,
+  .topbar__pill:focus-visible {
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+  }
+
+  .topbar__burger {
+    /* Hidden unless the script that drives it is running. */
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: currentColor;
+    cursor: pointer;
+  }
+
+  .topbar__bar {
+    display: block;
+    width: 22px;
+    height: 1px;
+    margin-inline: auto;
+    background-color: currentColor;
+  }
+
+  @media (max-width: 819.98px) {
+    :global(.nav-js) .topbar__list {
       display: none;
+    }
+
+    :global(.nav-js) .topbar__burger {
+      display: flex;
     }
   }
 
+  /* Without script the row simply stays, wrapping if it must. */
+  @media (max-width: 819.98px) {
+    .topbar {
+      flex-wrap: wrap;
+    }
+  }
+
+  .menu {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background-color: var(--color-shell);
+    color: var(--color-ink);
+  }
+
+  .menu::backdrop {
+    background-color: rgb(var(--shell-rgb) / 0.98);
+  }
+
+  .menu__close {
+    position: absolute;
+    top: clamp(0.75rem, 3vw, 1.5rem);
+    right: clamp(0.75rem, 3vw, 1.5rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+
+  .menu__x {
+    position: absolute;
+    width: 20px;
+    height: 1px;
+    background-color: currentColor;
+  }
+
+  .menu__x:first-of-type {
+    transform: rotate(45deg);
+  }
+
+  .menu__x:last-of-type {
+    transform: rotate(-45deg);
+  }
+
+  .menu__nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+    padding: 5rem 1.5rem;
+  }
+
+  .menu__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    text-align: center;
+  }
+
+  .menu__link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Comfortably past the 56px asked for. */
+    min-height: 60px;
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 7vw, 2.5rem);
+    line-height: 1.2;
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+
+  .menu__link--reply {
+    margin-top: 1rem;
+    color: var(--color-ochre);
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .topbar__link {
+    .skip,
+    .topbar,
+    .topbar__link,
+    .topbar__pill {
       transition: none;
     }
   }

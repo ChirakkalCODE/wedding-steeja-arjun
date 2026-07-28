@@ -177,7 +177,10 @@ const fontFaces = [
 
   <body>
     <TopBar />
-    <main>
+    {/* The skip link's target. tabindex="-1" so the jump actually moves focus
+        rather than only the scroll position — <main> is not focusable
+        otherwise, and the next Tab would return to the top of the page. */}
+    <main id="main" tabindex="-1">
       <Hero />
       <Countdown />
       <Story />
