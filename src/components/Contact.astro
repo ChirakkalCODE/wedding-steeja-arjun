@@ -1,0 +1,204 @@
+---
+import { CONTACTS, whatsappLink } from '../data/contacts';
+---
+
+<section class="contact" id="contact" aria-labelledby="contact-title">
+  <div class="contact__inner">
+    <p class="contact__eyebrow" data-reveal>Any questions</p>
+    <h2 class="contact__title" id="contact-title" data-reveal>We&rsquo;re happy to help</h2>
+
+    <p class="contact__intro" data-reveal="2">
+      For anything at all about the wedding, please reach out to our brothers. They&rsquo;ll
+      be glad to help with details, directions or anything you&rsquo;re unsure about.
+    </p>
+
+    <ul class="contact__cards" data-reveal="2">
+      {
+        CONTACTS.map((contact) => (
+          <li class="contact__card">
+            <h3 class="contact__name">{contact.name}</h3>
+            {contact.role && <p class="contact__role">{contact.role}</p>}
+            {contact.note && <p class="contact__pill">{contact.note}</p>}
+
+            <div class="contact__actions">
+              {/* Accessible names carry the person, so a screen-reader user
+                  hearing the links out of context still knows who they ring. */}
+              <a
+                class="contact__action contact__action--call"
+                href={`tel:${contact.phone}`}
+                aria-label={`Call ${contact.name}`}
+              >
+                Call
+              </a>
+              {contact.whatsapp && (
+                <a
+                  class="contact__action contact__action--whatsapp"
+                  href={whatsappLink(contact)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Message ${contact.name} on WhatsApp`}
+                >
+                  WhatsApp
+                </a>
+              )}
+            </div>
+
+            {/* Plain, selectable text so it can be copied or read out. */}
+            <p class="contact__number">{contact.display}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>
+
+<style>
+  .contact {
+    background-color: var(--color-shell);
+  }
+
+  .contact__inner {
+    max-width: 52rem;
+    margin-inline: auto;
+    padding: clamp(3.5rem, 8vw, 6.5rem);
+    text-align: center;
+  }
+
+  .contact__eyebrow {
+    font-size: 0.7rem;
+    line-height: 1.6;
+    letter-spacing: 0.28em;
+    text-indent: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .contact__title {
+    margin-top: clamp(0.75rem, 1.6vw, 1.1rem);
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.25rem, 5.5vw, 3.5rem);
+    line-height: 1.05;
+    color: var(--color-ink);
+  }
+
+  .contact__intro {
+    max-width: 56ch;
+    margin: clamp(0.9rem, 2vw, 1.25rem) auto 0;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+
+  .contact__cards {
+    display: grid;
+    gap: clamp(1rem, 2.5vw, 1.5rem);
+    margin: clamp(2rem, 4.5vw, 3rem) 0 0;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+  }
+
+  @media (min-width: 700px) {
+    .contact__cards {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* Quiet: a hairline and nothing else. */
+  .contact__card {
+    display: flex;
+    flex-direction: column;
+    padding: clamp(1.25rem, 3vw, 1.75rem);
+    border: 1px solid rgb(var(--ink-rgb) / 0.12);
+  }
+
+  .contact__name {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    color: var(--color-ink);
+  }
+
+  .contact__role {
+    margin-top: 0.25rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--color-muted);
+  }
+
+  .contact__pill {
+    align-self: start;
+    margin-top: 0.6rem;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--color-muted);
+    border-radius: 999px;
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .contact__actions {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: clamp(1rem, 2.5vw, 1.35rem);
+  }
+
+  .contact__action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Comfortably past the 48px the guidance asks for. This is the control an
+       84-year-old taps on a phone; elegance loses to hit area here. */
+    min-height: 52px;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .contact__action--call {
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+  }
+
+  .contact__action--call:hover,
+  .contact__action--call:focus-visible {
+    background-color: transparent;
+    color: var(--color-ink);
+  }
+
+  .contact__action--whatsapp {
+    background-color: transparent;
+    color: var(--color-ink);
+  }
+
+  .contact__action--whatsapp:hover,
+  .contact__action--whatsapp:focus-visible {
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+  }
+
+  .contact__number {
+    margin-top: 0.9rem;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+    user-select: text;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .contact__action {
+      transition: none;
+    }
+  }
+</style>

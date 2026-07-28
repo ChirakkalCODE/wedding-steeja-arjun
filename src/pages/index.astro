@@ -3,8 +3,10 @@ import instrumentSerif from '@fontsource/instrument-serif/files/instrument-serif
 import instrumentSerifItalic from '@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2';
 import interVariable from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2';
 
+import Contact from '../components/Contact.astro';
 import Countdown from '../components/Countdown.astro';
 import Dresscode from '../components/Dresscode.astro';
+import Footer from '../components/Footer.astro';
 import Faq from '../components/Faq.astro';
 import Gallery from '../components/Gallery.astro';
 import Hero from '../components/Hero.astro';
@@ -185,6 +187,9 @@ const fontFaces = [
       <Travel />
       <Gallery />
       <Faq />
+      <Contact />
     </main>
+    {/* Outside <main>: it is the page's footer, not part of its main content. */}
+    <Footer />
   </body>
 </html>
