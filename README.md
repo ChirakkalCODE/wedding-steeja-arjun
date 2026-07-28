@@ -2,9 +2,31 @@
 
 One-page wedding site for 6 September 2026, Akaparambu &amp; Nedumbassery, Kerala.
 
-**Built so far: the hero, the countdown, Our Story, the Schedule, the Venues and
-the Dress code.** Of the top bar's links, `#story` and `#schedule` now resolve;
-`#faq` and `#rsvp` are still stubs awaiting their sections.
+**Built so far: the hero, the countdown, Our Story, the Schedule, the Venues,
+the Dress code and Travel & stay.** Of the top bar's links, `#story` and
+`#schedule` now resolve; `#faq` and `#rsvp` are still stubs awaiting their
+sections.
+
+### Copy still to be written
+
+Four placeholders render as a visible `<!-- COPY TODO -->` marker in a monospace
+face — deliberately unmissable, because an empty paragraph under a heading reads
+as a bug and an invisible marker is one that ships.
+
+| file | line | what goes here |
+| --- | --- | --- |
+| `src/components/Travel.astro` | 35 | Flying from Switzerland |
+| `src/components/Travel.astro` | 39 | Travelling within India |
+| `src/components/Travel.astro` | 88 | Getting around |
+| `src/components/Travel.astro` | 92 | Weather in September |
+
+Open TODOs in data: `src/data/travel.ts:38` (`HOTELS` is empty),
+`src/data/wedding.ts:43` and `:55` (venue coordinates), and the commented-out
+children group in `src/data/dresscode.ts`.
+
+Nothing about flights, drive times, taxi fares, distances or visa rules was
+written speculatively. The entry-requirements line links to the official portal
+and states nothing that could go stale.
 
 `src/data/dresscode.ts` holds the three guest groups and the two colours to
 avoid. **A fourth group for children is present but commented out** — the couple
