@@ -17,6 +17,11 @@
 
   --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
   --font-body: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Handwriting accent. Two places only — the top-bar monogram and the
+     signature under the band quote. Never body copy, labels, buttons or nav,
+     and never below 18px: it loses legibility fast at small sizes and this
+     audience skews older. */
+  --font-script: "Shadows Into Light Two", cursive;
 }
 
 :root {
