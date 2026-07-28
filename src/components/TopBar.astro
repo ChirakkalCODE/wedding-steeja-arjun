@@ -1,0 +1,114 @@
+---
+/**
+ * Sits over the hero photo with no background of its own — the hero scrim is
+ * what makes it legible. Deliberately not sticky and carries no scroll
+ * listener; that behaviour arrives in a later step.
+ */
+const links = [
+  { label: 'Story', href: '#story' },
+  { label: 'Schedule', href: '#schedule' },
+  { label: 'Q&A', href: '#faq' },
+  { label: 'Reply', href: '#rsvp' },
+] as const;
+---
+
+<!-- Deliberately NOT carrying the `rise` entrance class, and this is load-
+     bearing rather than an oversight. Chrome excludes an image that covers the
+     whole viewport from being a Largest Contentful Paint candidate (verified:
+     at `inset: 1px` the hero photo becomes the LCP, at `inset: 0` it does not),
+     so the hero photograph can never be this page's LCP element. The entrance
+     animation starts every other text element at opacity 0, which disqualifies
+     those too — leaving the page with no LCP candidate at all, which in turn
+     makes Lighthouse's default simulated run fail outright with NO_LCP rather
+     than score it. Painting the wordmark immediately gives the page a real
+     first contentful element. The brief's stagger applies to the hero content;
+     animating the bar as well was an addition, not a requirement. -->
+<header class="topbar">
+  <p class="topbar__mark">Steeja <em>&amp;</em> Arjun</p>
+
+  <nav class="topbar__nav" aria-label="Sections of this page">
+    <ul class="topbar__list">
+      {
+        links.map(({ label, href }) => (
+          <li class:list={['topbar__item', href === '#rsvp' && 'topbar__item--keep']}>
+            <a class="topbar__link" href={href}>
+              {label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </nav>
+</header>
+
+<style>
+  .topbar {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 4;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1.25rem;
+    /* Clears the invitation frame rather than crossing it. */
+    padding: calc(var(--frame-inset) + clamp(0.9rem, 2.2vw, 1.6rem))
+      calc(var(--frame-inset) + clamp(0.9rem, 2.4vw, 1.9rem));
+    color: var(--color-shell);
+  }
+
+  .topbar__mark {
+    font-family: var(--font-display);
+    font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .topbar__mark em {
+    font-style: italic;
+  }
+
+  .topbar__list {
+    display: flex;
+    align-items: baseline;
+    gap: clamp(1.1rem, 2.6vw, 2.1rem);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .topbar__link {
+    display: inline-block;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-decoration: none;
+    /* See the note on secondary type in Hero.astro — legibility over the
+       photograph is bought with opacity here rather than with more scrim. */
+    color: rgb(var(--shell-rgb) / 0.92);
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid transparent;
+    transition: color 0.25s ease, border-color 0.25s ease;
+  }
+
+  .topbar__link:hover,
+  .topbar__link:focus-visible {
+    color: rgb(var(--shell-rgb) / 1);
+    border-bottom-color: rgb(var(--shell-rgb) / 0.55);
+  }
+
+  /* Below 760px the nav collapses to the one link that matters — the others
+     return with the real navigation in a later step. */
+  @media (max-width: 759.98px) {
+    .topbar__item:not(.topbar__item--keep) {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .topbar__link {
+      transition: none;
+    }
+  }
+</style>
