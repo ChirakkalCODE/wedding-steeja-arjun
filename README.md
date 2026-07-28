@@ -3,9 +3,15 @@
 One-page wedding site for 6 September 2026, Akaparambu &amp; Nedumbassery, Kerala.
 
 **Built so far: the hero, the countdown, Our Story, the Schedule, the Venues,
-the Dress code and Travel & stay.** Of the top bar's links, `#story` and
-`#schedule` now resolve; `#faq` and `#rsvp` are still stubs awaiting their
-sections.
+the Dress code, Travel & stay and the Gallery.** Of the top bar's links,
+`#story` and `#schedule` now resolve; `#faq` and `#rsvp` are still stubs
+awaiting their sections.
+
+The gallery is driven entirely by `src/data/gallery.ts`. Adding a photo is one
+entry in that array — the grid, the lightbox and the reveal stagger all read
+from it. The set deliberately mixes black and white with colour and portrait
+with landscape; nothing normalises that, and the one landscape frame spans two
+columns above 640px.
 
 ### Copy still to be written
 
@@ -200,7 +206,11 @@ All CSS is inlined into the document, so there is no render-blocking stylesheet.
 The Our Story photo is lazy and below the fold, so it is not in those totals; it
 costs a further 13–37 kB depending on viewport.
 
-**JavaScript: 5.7 kB raw, 1.8 kB gzipped, in zero requests.** Four inline
+Gallery images, cold cache, whole page scrolled: **281 kB** for all eight at
+390x844 @3, **184 kB** at 1440x900 @1. The lightbox fetches nothing until a
+photo is opened, and then only the current frame and its two neighbours.
+
+**JavaScript: 8.6 kB raw, in zero requests.** Five inline
 scripts — the
 countdown clock, the shared reveal observer, the map facades and the dress-code
 swatch copy. No bundle, no framework, no `<script src>`. Every one of them is an

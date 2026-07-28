@@ -91,6 +91,38 @@ for (const source of new Set(OUTPUTS.map((o) => o.source))) {
   }
 }
 
+/**
+ * Gallery masters: resized, never cropped. The set deliberately mixes portrait
+ * with landscape and colour with black and white, and normalising any of that
+ * away would be the wrong call — so there is no assertion on dimensions here,
+ * and no `extract`. 1920 is the widest the lightbox ever asks for.
+ */
+const GALLERY = [
+  'EPK03357',
+  'EPK03505',
+  'EPK03516',
+  'EPK03533',
+  'EPW00926',
+  'EPW01498',
+  'EPW09695',
+  'EPW09924',
+];
+
+for (const name of GALLERY) {
+  const target = resolve(root, `src/assets/photos/gallery/${name}.jpg`);
+  await mkdir(dirname(target), { recursive: true });
+
+  const info = await sharp(resolve(root, `src/assets/photos/${name}.jpg`))
+    .resize({ width: MAX_WIDTH, withoutEnlargement: true })
+    .jpeg({ quality: 90, chromaSubsampling: '4:2:0', mozjpeg: true })
+    .toFile(target);
+
+  console.log(
+    `  gallery/${name}.jpg`.padEnd(40) +
+      ` ${info.width}x${info.height}  ${(info.size / 1024).toFixed(0)} kB`,
+  );
+}
+
 for (const { source, file, crop, out, encode } of OUTPUTS) {
   const target = resolve(root, file);
   await mkdir(dirname(target), { recursive: true });
