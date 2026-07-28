@@ -1,0 +1,269 @@
+---
+import {
+  EVENTS,
+  WEDDING_DATE,
+  WEDDING_DATE_LABEL,
+  formatTime,
+  instantOf,
+  utcOffset,
+} from '../data/wedding';
+import { withBase } from '../lib/paths';
+
+const offset = utcOffset();
+---
+
+<section class="schedule" id="schedule" aria-labelledby="schedule-title">
+  <div class="schedule__inner">
+    <p class="schedule__eyebrow" data-reveal>The day</p>
+    <h2 class="schedule__title" id="schedule-title" data-reveal>{WEDDING_DATE_LABEL}</h2>
+
+    <ol class="schedule__list" data-reveal="2">
+      {
+        EVENTS.map((event) => (
+          <li class="schedule__item">
+            <p class="schedule__time">
+              <time datetime={`${WEDDING_DATE}T${event.start}:00${offset}`}>
+                {formatTime(event.start)}
+              </time>
+            </p>
+
+            <div class="schedule__rail" aria-hidden="true">
+              <span class="schedule__dot" />
+            </div>
+
+            <div class="schedule__body">
+              <h3 class="schedule__event">{event.title}</h3>
+              <p class="schedule__venue">{event.venue}</p>
+              <p class="schedule__area">{event.area}</p>
+              <p class="schedule__note">{event.note}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+
+    <p class="schedule__closing" data-reveal="3">
+      We kindly invite you to join us for the Holy Mass, followed by an evening of
+      celebration, dinner and dancing at One Kochi. We can&rsquo;t wait to celebrate this
+      special day with you.
+    </p>
+
+    <p class="schedule__actions" data-reveal="3">
+      <a class="schedule__cta" href={withBase('wedding.ics')} download="steeja-and-arjun.ics">
+        Add to calendar
+      </a>
+    </p>
+  </div>
+</section>
+
+<style>
+  .schedule {
+    background-color: var(--color-shell);
+  }
+
+  .schedule__inner {
+    max-width: 1240px;
+    margin-inline: auto;
+    padding: clamp(3.5rem, 8vw, 6.5rem);
+  }
+
+  .schedule__eyebrow {
+    font-size: 0.7rem;
+    line-height: 1.6;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .schedule__title {
+    margin-top: clamp(0.75rem, 1.6vw, 1.1rem);
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.25rem, 5.5vw, 3.5rem);
+    line-height: 1.05;
+    color: var(--color-ink);
+  }
+
+  .schedule__list {
+    margin: clamp(2.5rem, 5vw, 3.75rem) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .schedule__item {
+    /* Shared by the time type and the rail, so the dot lands on the optical
+       centre of the first line of the time whatever the clamp resolves to. */
+    --time-size: clamp(2rem, 4vw, 2.75rem);
+    --dot-offset: calc(var(--time-size) * 0.55);
+    --gap: clamp(1.75rem, 4vw, 2.5rem);
+
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    column-gap: clamp(0.9rem, 2.5vw, 1.4rem);
+    /* Spacing lives in padding rather than a grid gap, so the rail below can
+       reach through it with a negative offset and the stroke stays unbroken. */
+    padding-block: var(--gap);
+  }
+
+  .schedule__item:first-child {
+    padding-top: 0;
+  }
+
+  .schedule__item:last-child {
+    padding-bottom: 0;
+  }
+
+  .schedule__rail {
+    position: relative;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .schedule__rail::before {
+    content: '';
+    position: absolute;
+    /* The rail element only covers the grid row; the space between entries is
+       the item's own padding. Pulling the stroke out by that much on both ends
+       makes consecutive entries' strokes meet exactly at the border box. */
+    top: calc(var(--gap) * -1);
+    bottom: calc(var(--gap) * -1);
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+    background-color: var(--color-ochre);
+  }
+
+  /* The stroke starts at the first dot and stops at the last one, rather than
+     running off both ends of the list. */
+  .schedule__item:first-child .schedule__rail::before {
+    top: var(--dot-offset);
+  }
+
+  .schedule__item:last-child .schedule__rail::before {
+    bottom: auto;
+    height: calc(var(--gap) + var(--dot-offset));
+  }
+
+  .schedule__dot {
+    position: absolute;
+    top: var(--dot-offset);
+    left: 50%;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--color-ochre);
+  }
+
+  .schedule__time {
+    grid-column: 2;
+    grid-row: 1;
+    font-family: var(--font-display);
+    font-size: var(--time-size);
+    line-height: 1.1;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .schedule__body {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0.4rem;
+  }
+
+  @media (min-width: 900px) {
+    .schedule__item {
+      grid-template-columns: minmax(0, 9rem) 1.25rem minmax(0, 1fr);
+    }
+
+    .schedule__time {
+      grid-column: 1;
+      grid-row: 1;
+      text-align: right;
+    }
+
+    .schedule__rail {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .schedule__body {
+      grid-column: 3;
+      grid-row: 1;
+      margin-top: 0;
+    }
+  }
+
+  .schedule__event {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.5;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .schedule__venue {
+    margin-top: 0.7rem;
+    font-size: 1.05rem;
+    line-height: 1.5;
+    color: var(--color-ink);
+  }
+
+  .schedule__area {
+    margin-top: 0.2rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+
+  .schedule__note {
+    margin-top: 0.7rem;
+    font-size: 1rem;
+    font-style: italic;
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+
+  .schedule__closing {
+    max-width: 56ch;
+    margin: clamp(2.75rem, 6vw, 4rem) auto 0;
+    text-align: center;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+
+  .schedule__actions {
+    margin-top: clamp(1.75rem, 3.5vw, 2.5rem);
+    text-align: center;
+  }
+
+  .schedule__cta {
+    display: inline-block;
+    padding: 0.95rem 1.9rem;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+    font-size: 0.9rem;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .schedule__cta:hover,
+  .schedule__cta:focus-visible {
+    background-color: transparent;
+    color: var(--color-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .schedule__cta {
+      transition: none;
+    }
+  }
+</style>

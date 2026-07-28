@@ -1,0 +1,310 @@
+---
+import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
+---
+
+<section class="venue" id="venue" aria-labelledby="venue-title">
+  <div class="venue__inner">
+    <p class="venue__eyebrow" data-reveal>Where</p>
+    <h2 class="venue__title" id="venue-title" data-reveal>Getting there</h2>
+
+    <ul class="venue__cards">
+      {
+        EVENTS.map((event, i) => (
+          <li class="venue__card" data-reveal={i === 0 ? '' : '2'}>
+            <h3 class="venue__name">{event.venue}</h3>
+            <p class="venue__area">{event.area}</p>
+
+            {/* Facade, not an iframe. Google's embed pulls well over a megabyte
+                and a pile of third-party script; none of it loads until someone
+                asks for it. */}
+            <div class="venue__map" data-map data-embed={mapEmbedSrc(event)}>
+              <button
+                type="button"
+                class="venue__facade"
+                data-map-button
+                aria-label={`Load the map of ${event.venue}, ${event.area}`}
+              >
+                <svg
+                  class="venue__pin"
+                  viewBox="0 0 24 24"
+                  width="22"
+                  height="22"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z" />
+                  <circle cx="12" cy="10" r="2.5" />
+                </svg>
+                <span class="venue__facade-name">{event.venue}</span>
+                <span class="venue__facade-cta">Tap to load map</span>
+              </button>
+            </div>
+
+            <p class="venue__actions">
+              <a
+                class="venue__directions"
+                href={event.mapsLink}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Directions
+              </a>
+              {/* A button, not an anchor: it copies, it does not navigate. */}
+              <button
+                type="button"
+                class="venue__copy"
+                data-copy={addressOf(event)}
+                data-label="Copy address"
+              >
+                Copy address
+              </button>
+            </p>
+
+            <p class="sr-only" role="status" data-map-status />
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>
+
+<script is:inline>
+  (function () {
+    function announce(card, message) {
+      var status = card.querySelector('[data-map-status]');
+      if (status) status.textContent = message;
+    }
+
+    var maps = document.querySelectorAll('[data-map]');
+    for (var i = 0; i < maps.length; i++) {
+      (function (holder) {
+        var button = holder.querySelector('[data-map-button]');
+        if (!button) return;
+
+        button.addEventListener('click', function () {
+          var frame = document.createElement('iframe');
+          frame.src = holder.getAttribute('data-embed');
+          frame.title = button.getAttribute('aria-label').replace(/^Load the map/, 'Map');
+          frame.loading = 'lazy';
+          frame.referrerPolicy = 'no-referrer-when-downgrade';
+          frame.setAttribute('allowfullscreen', '');
+          frame.className = 'venue__frame';
+          holder.replaceChildren(frame);
+          announce(
+            holder.closest('.venue__card') || holder,
+            frame.title + ' loaded.',
+          );
+        });
+      })(maps[i]);
+    }
+
+    var copiers = document.querySelectorAll('[data-copy]');
+    for (var j = 0; j < copiers.length; j++) {
+      (function (button) {
+        var revert;
+        button.addEventListener('click', function () {
+          var address = button.getAttribute('data-copy');
+          var card = button.closest('.venue__card');
+
+          var done = function (ok) {
+            button.textContent = ok ? 'Copied' : 'Press Ctrl+C';
+            announce(card, ok ? 'Address copied: ' + address : 'Could not copy the address.');
+            clearTimeout(revert);
+            revert = setTimeout(function () {
+              button.textContent = button.getAttribute('data-label');
+            }, 2000);
+          };
+
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(address).then(
+              function () { done(true); },
+              function () { done(false); },
+            );
+          } else {
+            done(false);
+          }
+        });
+      })(copiers[j]);
+    }
+  })();
+</script>
+
+<style>
+  .venue {
+    background-color: var(--color-shell);
+  }
+
+  .venue__inner {
+    max-width: 1240px;
+    margin-inline: auto;
+    padding: clamp(3.5rem, 8vw, 6.5rem);
+    /* A second surface tone, mixed from the two palette tokens rather than
+       introduced as a new colour. */
+    --surface-2: color-mix(in srgb, var(--color-shell) 94%, var(--color-ink));
+  }
+
+  .venue__eyebrow {
+    font-size: 0.7rem;
+    line-height: 1.6;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .venue__title {
+    margin-top: clamp(0.75rem, 1.6vw, 1.1rem);
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.25rem, 5.5vw, 3.5rem);
+    line-height: 1.05;
+    color: var(--color-ink);
+  }
+
+  .venue__cards {
+    display: grid;
+    gap: clamp(2.25rem, 5vw, 3.5rem);
+    margin: clamp(2.5rem, 5vw, 3.5rem) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @media (min-width: 900px) {
+    .venue__cards {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .venue__name {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.5rem, 2.6vw, 1.9rem);
+    line-height: 1.15;
+    color: var(--color-ink);
+  }
+
+  .venue__area {
+    margin-top: 0.4rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+
+  .venue__map {
+    margin-top: clamp(1.1rem, 2.4vw, 1.5rem);
+    /* Reserved before anything loads, so swapping the facade for the iframe
+       cannot shift the page. */
+    aspect-ratio: 4 / 3;
+  }
+
+  .venue__facade,
+  .venue__frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 1px solid var(--color-ochre);
+  }
+
+  .venue__facade {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 1.5rem;
+    background-color: var(--surface-2);
+    color: var(--color-muted);
+    font: inherit;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .venue__facade:hover,
+  .venue__facade:focus-visible {
+    background-color: color-mix(in srgb, var(--color-shell) 88%, var(--color-ink));
+  }
+
+  .venue__pin {
+    color: var(--color-ochre);
+  }
+
+  .venue__facade-name {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    line-height: 1.25;
+    color: var(--color-ink);
+  }
+
+  .venue__facade-cta {
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-indent: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .venue__frame {
+    border-width: 1px;
+  }
+
+  .venue__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    margin-top: clamp(1rem, 2.2vw, 1.35rem);
+  }
+
+  .venue__directions {
+    display: inline-block;
+    padding: 0.8rem 1.6rem;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+    font-size: 0.85rem;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .venue__directions:hover,
+  .venue__directions:focus-visible {
+    background-color: transparent;
+    color: var(--color-ink);
+  }
+
+  .venue__copy {
+    padding: 0.8rem 0;
+    border: 0;
+    background: none;
+    color: var(--color-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+    text-decoration-color: var(--color-ochre);
+    cursor: pointer;
+    transition: color 0.3s ease;
+  }
+
+  .venue__copy:hover,
+  .venue__copy:focus-visible {
+    color: var(--color-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .venue__facade,
+    .venue__directions,
+    .venue__copy {
+      transition: none;
+    }
+  }
+</style>

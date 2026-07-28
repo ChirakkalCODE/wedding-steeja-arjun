@@ -2,10 +2,18 @@
 
 One-page wedding site for 6 September 2026, Akaparambu &amp; Nedumbassery, Kerala.
 
-**Built so far: the hero, the countdown, and Our Story.** The top bar's Schedule
-and Q&amp;A links point at `#schedule` and `#faq`, which do not exist until a
-later step; `#story` and `#rsvp` are the two that resolve today (`#rsvp` lands
-on the story section's neighbour-to-be, so it is still a stub target).
+**Built so far: the hero, the countdown, Our Story, the Schedule and the
+Venues.** Of the top bar's links, `#story` and `#schedule` now resolve; `#faq`
+and `#rsvp` are still stubs awaiting their sections.
+
+`src/data/wedding.ts` is the single source of truth for the date, the times and
+the two venues. The Schedule, the Venue cards and `/wedding.ics` all read from
+it, so nothing about the day is written twice.
+
+**The venue coordinates are still `null`, marked TODO.** While they are, the
+maps fall back to a text query on "venue, area", which Google resolves correctly
+for both. They were left empty rather than guessed — a wrong pin sends guests to
+the wrong church.
 
 ## Running it
 
@@ -109,6 +117,24 @@ JavaScript unavailable the class never appears and the content is simply visible
 and under `prefers-reduced-motion` the script returns before adding it, so no
 observer is ever created.
 
+## The calendar file and the maps
+
+`/wedding.ics` is an Astro static endpoint (`src/pages/wedding.ics.ts`), built
+from the same data as the page so the two can never disagree. `DTSTART`/`DTEND`
+are UTC with a `Z` suffix rather than carrying a `VTIMEZONE` block — both are
+valid RFC 5545, and UTC is the form no client can misread, which is what matters
+when half the guest list opens it on a phone set to Swiss time. Lines are folded
+at 75 octets on code-point boundaries with CRLF endings; iOS Calendar rejects
+the whole file otherwise.
+
+The maps are **click-to-load facades**, not iframes. Google's embed pulls half a
+megabyte across 27 requests, and none of it is fetched until someone asks for
+it. The facade is a real `<button>`, so it works from the keyboard, and the swap
+is announced through a `role="status"` region. "Copy address" is a `<button>`
+too rather than the ghost *link* the brief named — it copies, it does not
+navigate, and a link that goes nowhere is the wrong control for a screen-reader
+user. It keeps the ghost-link styling.
+
 ## Measured
 
 Chrome 150, `astro preview`, cold cache.
@@ -124,9 +150,22 @@ All CSS is inlined into the document, so there is no render-blocking stylesheet.
 The Our Story photo is lazy and below the fold, so it is not in those totals; it
 costs a further 13–37 kB depending on viewport.
 
-**JavaScript: 2.0 kB raw, 834 bytes gzipped, in zero requests.** Two inline
-scripts — the countdown clock in `Countdown.astro`, and the shared reveal
-observer in `index.astro`. No bundle, no framework, no `<script src>`.
+**JavaScript: 4.0 kB raw, 1.4 kB gzipped, in zero requests.** Three inline
+scripts — the
+countdown clock, the shared reveal observer, and the map facades. No bundle, no
+framework, no `<script src>`.
+
+Whole page, scrolled to the bottom, on a 412px phone:
+
+| | page weight | requests | third-party |
+| --- | --- | --- | --- |
+| as loaded | 207.8 kB | 7 | **0 bytes** |
+| after opening one map | 753.4 kB | 34 | 545.5 kB |
+| after opening both maps | 829.4 kB | 45 | 621.5 kB |
+
+That is the whole argument for the facade: the page costs 208 kB and contacts
+nobody, and a single map costs two and a half times the entire rest of the site.
+The second map adds only 76 kB because it reuses the first one's payload.
 
 Lighthouse (mobile, default simulated throttling, three consecutive runs):
 **performance 100, accessibility 100, best practices 100, SEO 100.**
