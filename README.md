@@ -2,9 +2,15 @@
 
 One-page wedding site for 6 September 2026, Akaparambu &amp; Nedumbassery, Kerala.
 
-**Built so far: the hero, the countdown, Our Story, the Schedule and the
-Venues.** Of the top bar's links, `#story` and `#schedule` now resolve; `#faq`
-and `#rsvp` are still stubs awaiting their sections.
+**Built so far: the hero, the countdown, Our Story, the Schedule, the Venues and
+the Dress code.** Of the top bar's links, `#story` and `#schedule` now resolve;
+`#faq` and `#rsvp` are still stubs awaiting their sections.
+
+`src/data/dresscode.ts` holds the three guest groups and the two colours to
+avoid. **A fourth group for children is present but commented out** — the couple
+has not decided a rule, so none was invented. Uncomment it, fill in `garment` and
+`palette`, and the pills, the panel CSS and the selector all handle it with no
+other change.
 
 `src/data/wedding.ts` is the single source of truth for the date, the times and
 the two venues. The Schedule, the Venue cards and `/wedding.ics` all read from
@@ -135,6 +141,28 @@ too rather than the ghost *link* the brief named — it copies, it does not
 navigate, and a link that goes nowhere is the wrong control for a screen-reader
 user. It keeps the ghost-link styling.
 
+## The dress code section
+
+The group selector is **CSS only** — three visually hidden radios and
+`:checked ~` sibling rules. No JavaScript is involved in switching groups, so
+the section works with scripting turned off; verified by loading it with script
+execution disabled and switching groups. The rules are enumerated by index
+rather than by id so a fourth group needs no CSS change.
+
+The only JavaScript is the swatch copy, and it is a genuine upgrade rather than
+a dependency. Swatches render as inert `<span>`s; when `navigator.clipboard`
+exists the script replaces each with a real `<button>` — inheriting focus, Enter
+and Space for free — and unhides the "tap a colour to copy" line. Without the
+API there is no dead control and no instruction for something the browser cannot
+do. The three garment silhouettes are inline SVG drawn for this site; the
+"please avoid" swatches carry a diagonal strike and their names, and are neither
+focusable nor copyable.
+
+Every swatch is labelled in text — the hex for the palettes, the colour name for
+the two to avoid — so colour is never the only carrier of meaning, and those
+labels sit on shell rather than on the swatch, several of which are far too pale
+to hold text.
+
 ## Measured
 
 Chrome 150, `astro preview`, cold cache.
@@ -150,10 +178,12 @@ All CSS is inlined into the document, so there is no render-blocking stylesheet.
 The Our Story photo is lazy and below the fold, so it is not in those totals; it
 costs a further 13–37 kB depending on viewport.
 
-**JavaScript: 4.0 kB raw, 1.4 kB gzipped, in zero requests.** Three inline
+**JavaScript: 5.7 kB raw, 1.8 kB gzipped, in zero requests.** Four inline
 scripts — the
-countdown clock, the shared reveal observer, and the map facades. No bundle, no
-framework, no `<script src>`.
+countdown clock, the shared reveal observer, the map facades and the dress-code
+swatch copy. No bundle, no framework, no `<script src>`. Every one of them is an
+enhancement: with scripting off the page loses the live clock, the reveal
+animation, the inline maps and the copy button, and keeps everything else.
 
 Whole page, scrolled to the bottom, on a 412px phone:
 
