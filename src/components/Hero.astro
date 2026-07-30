@@ -13,6 +13,12 @@ const alt =
   'Steeja and Arjun sitting together on a ledge in front of a weathered ochre wall painted with a large white bird.';
 ---
 
+{/* Seven lines and nothing else. The hero used to carry the ceremony times, the
+    two village names and the reply deadline as well — every one of which is
+    stated again, in full and in context, further down the page. Repeating them
+    here bought nothing and cost the one thing an invitation is for: a first
+    screen that says who, when, and where, and then gets out of the way. The
+    room those four lines took has been given back to the names. */}
 <section class="hero" aria-labelledby="couple">
   {/* Art-directed by hand: `<Picture>` emits no `media`, so it cannot switch
       crops. Same astro:assets pipeline, same formats and widths. Order matters —
@@ -76,13 +82,16 @@ const alt =
     <div class="hero__rule rise rise--2" aria-hidden="true"></div>
 
     <p class="hero__when rise rise--2">Sunday, 6 September 2026</p>
-    <p class="hero__where rise rise--2">
-      Akaparambu &amp; Nedumbassery &middot; Kerala, India
-    </p>
+    {/* The country, not the itinerary. Akaparambu and Nedumbassery are two
+        different places an hour apart, and naming them here reads as an address
+        rather than as a setting — the Schedule gives each one its own time. */}
+    <p class="hero__where rise rise--2">Kerala, India</p>
 
-    <a class="hero__cta rise rise--3" href="#rsvp">Let us know you&rsquo;re coming</a>
-
-    <p class="hero__by rise rise--3">Kindly reply by 20 August 2026</p>
+    {/* `#contact`, not `#rsvp`. There is no reply form on this site and never
+        was — the way a guest replies is to message one of the brothers, which is
+        what the Contact section is. `#rsvp` matched no element on the page, so
+        all three of these buttons were dead links. */}
+    <a class="hero__cta rise rise--3" href="#contact">Let us know you&rsquo;re coming</a>
   </div>
 
   <p class="hero__scroll rise rise--3" aria-hidden="true">Scroll</p>
@@ -154,15 +163,18 @@ const alt =
     position: relative;
     z-index: 2;
     display: grid;
-    /* Same max-content trap as `.hero` above — without this, "Akaparambu &
-       Nedumbassery · Kerala, India" runs off the side of a phone instead of
-       wrapping. */
+    /* Same max-content trap as `.hero` above — without this a long line runs
+       off the side of a phone instead of wrapping. */
     grid-template-columns: minmax(0, 1fr);
     align-content: center;
     /* Deliberately NOT `justify-items: center`: that would re-introduce the
        same problem per row. The rows stretch and the text is centred inside
-       them; the two items that must hug their content opt out below. */
-    --pad-y: clamp(3rem, 9vw, 5.5rem);
+       them; the one item that must hug its content opts out below.
+
+       Grown from clamp(3rem, 9vw, 5.5rem) with the four removed lines. The
+       frame is a card, and a card with fewer words on it wants more margin,
+       not the same margin and a hole in the middle. */
+    --pad-y: clamp(4rem, 11vw, 7rem);
     margin: var(--frame-inset);
     padding: var(--pad-y) clamp(1.5rem, 6vw, 4.5rem);
     border: 1px solid rgb(var(--shell-rgb) / 0.42);
@@ -172,28 +184,37 @@ const alt =
 
   /* Short viewports — 720p laptops, and small phones in the 568px-tall class.
      The padding above is driven by viewport *width*, so on a screen that is
-     short for its width it pushes the frame's bottom edge past the fold. */
+     short for its width it pushes the frame's bottom edge past the fold. The
+     names are also allowed to grow to 7rem now, so this guard does more work
+     than it used to. */
   @media (min-width: 900px) and (max-height: 860px), (max-height: 640px) {
     .hero__frame {
-      --pad-y: clamp(1.25rem, 3.5svh, 5.5rem);
+      --pad-y: clamp(1.25rem, 3.5svh, 7rem);
       /* Extra below keeps the compressed content clear of the Scroll label,
          which lives in the gutter rather than in the frame's flow. */
       padding-bottom: calc(var(--pad-y) + 1.25rem);
     }
   }
 
-  /* The top bar is absolutely positioned over the hero, so the frame has to
-     hold its own content out from under it. Only below 900px: there the bar's
-     wordmark and Reply link span the same width as the centred content and a
-     wrapped eyebrow runs straight into them. On wider screens the bar sits in
-     the far corners and the content never reaches it. The terms mirror
-     TopBar.astro's padding and the wordmark's line box. */
+  /* The top bar is fixed over the hero, so the frame has to hold its own
+     content out from under it. Only below 900px: there the bar and the centred
+     content share a width and a wrapped eyebrow would run into the monogram. On
+     wider screens the bar sits in the far corners and the content never reaches
+     it. Both terms are the bar's own, declared in TopBar.astro — deriving them
+     here from its padding is how the two drifted apart last time. */
   @media (max-width: 899.98px) {
+    /* No script: the bar renders solid and complete over the hero (see the
+       inversion note in TopBar.astro), so the frame clears the whole of it. */
     .hero__frame {
-      --topbar-clearance: calc(
-        clamp(0.9rem, 2.2vw, 1.6rem) + clamp(1.26rem, 2.88vw, 1.62rem) + 0.85rem
-      );
-      padding-top: max(var(--pad-y), var(--topbar-clearance));
+      padding-top: max(var(--pad-y), calc(var(--bar-h) + 0.5rem));
+    }
+
+    /* With script, the bar over the hero is the monogram and nothing else. The
+       pill and the 48px burger are only reserving space at that point, and
+       holding the invitation down by 48px to clear an invisible control is a
+       lot of a phone screen to give away. */
+    :global(.nav-js) .hero__frame {
+      padding-top: max(var(--pad-y), calc(var(--bar-h-hero) + 0.75rem));
     }
   }
 
@@ -219,21 +240,32 @@ const alt =
        values. Over a photograph, opacity is an expensive way to buy hierarchy —
        size, tracking and weight already carry it, and every point of opacity
        given back here is a point of scrim the photograph does not have to pay
-       for. Same reasoning for .hero__where, .hero__by and .hero__scroll. */
+       for. Same reasoning for .hero__where and .hero__scroll. */
     color: rgb(var(--shell-rgb) / 0.95);
   }
 
   /* The vertical rhythm is capped by height as well as width — a 1280x720
      screen has plenty of the first and very little of the second. */
   .hero__names {
-    margin-top: clamp(1.1rem, min(2.8vw, 4svh), 1.9rem);
+    margin-top: clamp(1.4rem, min(3.4vw, 4.6svh), 2.4rem);
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: clamp(3rem, 11vw, 6.5rem);
+    font-size: clamp(3.2rem, 12vw, 7rem);
     /* Unitless, so swapping in Instrument Serif over the Georgia fallback
        cannot change the block height. */
     line-height: 0.95;
     text-shadow: 0 2px 24px rgb(var(--shade-deep-rgb) / 0.35);
+  }
+
+  /* Must sit after the base rule, not up in the short-viewport block with the
+     padding it belongs to: same specificity, so source order is the only thing
+     deciding it, and above it simply never applies. On a 1280x720 laptop the
+     12vw term caps out at the full 7rem and the frame's bottom edge lands
+     within a few pixels of the fold; against viewport height it is 65px. */
+  @media (min-width: 900px) and (max-height: 860px), (max-height: 640px) {
+    .hero__names {
+      font-size: clamp(3.2rem, 9vh, 7rem);
+    }
   }
 
   .hero__names span {
@@ -249,7 +281,7 @@ const alt =
   .hero__rule {
     width: clamp(3rem, 10vw, 6rem);
     height: 1px;
-    margin-top: clamp(1.6rem, min(4vw, 5svh), 2.4rem);
+    margin-top: clamp(2rem, min(4.6vw, 5.6svh), 3rem);
     margin-inline: auto;
     background-image: linear-gradient(
       90deg,
@@ -260,7 +292,7 @@ const alt =
   }
 
   .hero__when {
-    margin-top: clamp(1.5rem, min(3.6vw, 4.6svh), 2.1rem);
+    margin-top: clamp(1.8rem, min(4vw, 5svh), 2.5rem);
     font-size: 1rem;
     line-height: 1.5;
     letter-spacing: 0.18em;
@@ -269,14 +301,14 @@ const alt =
   }
 
   .hero__where {
-    margin-top: 0.55rem;
+    margin-top: 0.6rem;
     font-size: 0.95rem;
     line-height: 1.6;
     color: rgb(var(--shell-rgb) / 0.92);
   }
 
   .hero__cta {
-    margin-top: clamp(1.9rem, min(4.4vw, 5.4svh), 2.6rem);
+    margin-top: clamp(2.3rem, min(5vw, 6svh), 3.2rem);
     /* Opts out of the stretched row so the pill hugs its label. */
     justify-self: center;
     max-width: 100%;
@@ -300,13 +332,6 @@ const alt =
     background-color: var(--color-shell);
     border-color: var(--color-shell);
     color: var(--color-ink);
-  }
-
-  .hero__by {
-    margin-top: 1rem;
-    font-size: 0.82rem;
-    line-height: 1.6;
-    color: rgb(var(--shell-rgb) / 0.88);
   }
 
   .hero__scroll {

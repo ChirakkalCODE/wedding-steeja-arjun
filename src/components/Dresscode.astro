@@ -1,5 +1,21 @@
 ---
+import { Picture } from 'astro:assets';
 import { AVOID, GROUPS } from '../data/dresscode';
+/* Derived 1920px master, not the original — see prepare-media.mjs.
+
+   The tilted frame against the yellow wall, and it is the right ground for this
+   particular section rather than just a brighter picture: the wall is the warm
+   ochre the palette is built from, and Steeja's red gingham is the peach the
+   section is asking everyone else to wear. The section illustrates its own
+   instruction.
+
+   It replaces the near-black embrace frame, which is exposed for one lamp and
+   read as an empty rectangle wherever it was put. That one now appears only in
+   the film strip, on ink, surrounded by its own tonal range.
+
+   The words never touch the photograph in either case: they are ink on shell
+   inside the bubble, at the same contrast as every other heading on the site. */
+import headerPhoto from '../assets/photos/gallery/EPW09924.jpg';
 
 /**
  * Flat, single-weight line silhouettes on a 240x320 canvas. Drawn here rather
@@ -47,16 +63,46 @@ const ILLUSTRATION: Record<string, { alt: string; paths: string[] }> = {
 ---
 
 <section class="dress" id="dresscode" aria-labelledby="dress-title">
+  {/* The header is the only full-bleed thing in this section; everything below
+      it is the ordinary shell column. The photograph is a backdrop, so the
+      block owns its height and the image is stretched to fill it — its own
+      ratio never sizes anything and it cannot shift the section as it decodes. */}
+  <div class="dress__header">
+    <div class="dress__header-media">
+      {/* Like the Story photograph, deliberately carries no `data-anim`. These
+          are the two images that have been reported blank, and a full-bleed
+          backdrop under a text card gains almost nothing from a clip wipe while
+          risking exactly the failure that keeps happening. The safety nets in
+          index.astro would catch it; not animating it at all means there is
+          nothing to catch. */}
+      <Picture
+        class="dress__header-photo"
+        src={headerPhoto}
+        formats={['avif', 'webp']}
+        widths={[640, 960, 1400, 1920]}
+        width={1920}
+        sizes="100vw"
+        alt="Steeja walking along a low ledge in a red gingham dress with her arms out for balance, laughing, Arjun behind her with one arm raised, against a weathered yellow wall painted with a fan palm."
+        loading="lazy"
+        decoding="async"
+      />
+      {/* Never lets the card's edge land on a bright patch. */}
+      <div class="dress__header-wash" aria-hidden="true"></div>
+    </div>
+
+    <div class="dress__bubble">
+      <p class="dress__eyebrow" data-anim="head">What to wear</p>
+      <h2 class="dress__title" id="dress-title" data-anim="head2">Dressed in peach and beige</h2>
+
+      <p class="dress__intro">
+        We&rsquo;d love everyone to match the day. Here&rsquo;s what we have in mind &mdash;
+        and thank you for playing along.
+      </p>
+    </div>
+  </div>
+
   <div class="dress__inner">
-    <p class="dress__eyebrow" data-reveal>What to wear</p>
-    <h2 class="dress__title" id="dress-title" data-reveal>Dressed in peach and beige</h2>
-
-    <p class="dress__intro" data-reveal="2">
-      We&rsquo;d love everyone to match the day. Here&rsquo;s what we have in mind &mdash;
-      and thank you for playing along.
-    </p>
-
-    <div class="dress__group" data-reveal="2">
+    <div class="dress__group">
       <h3 class="sr-only" id="dress-group-label">Choose a guest group</h3>
 
       {/* Real radios, visually hidden but focusable. Switching groups is CSS
@@ -133,7 +179,7 @@ const ILLUSTRATION: Record<string, { alt: string; paths: string[] }> = {
       <p class="sr-only" role="status" data-copy-status></p>
     </div>
 
-    <div class="dress__avoid" data-reveal="3">
+    <div class="dress__avoid">
       <h3 class="dress__avoid-title">Please avoid</h3>
 
       <ul class="dress__swatches dress__swatches--avoid">
@@ -178,7 +224,12 @@ const ILLUSTRATION: Record<string, { alt: string; paths: string[] }> = {
         var button = document.createElement('button');
         button.type = 'button';
         button.className = span.className + ' dress__swatch--copy';
-        button.setAttribute('data-hex', hex);
+        // Astro scopes component CSS with a `data-astro-cid-*` ATTRIBUTE, not a
+        // class, so copying className alone hands the replacement a set of
+        // selectors that no longer match it — the swatch loses its own styling
+        // and falls back to a default grey UA button. `dataset` round-trips the
+        // scope attribute along with `data-hex`.
+        Object.assign(button.dataset, span.dataset);
         button.setAttribute('aria-label', 'Copy colour code ' + hex);
         button.innerHTML = span.innerHTML;
         span.replaceWith(button);
@@ -209,12 +260,123 @@ const ILLUSTRATION: Record<string, { alt: string; paths: string[] }> = {
 <style>
   .dress {
     background-color: var(--color-shell);
+    /* One name for the photograph's height, because the mobile layout has to
+       offset the bubble by a fraction of it. Declared once so the two can never
+       be edited apart. */
+    --dress-header-h: clamp(52svh, 60vh, 560px);
   }
 
   .dress__inner {
     max-width: 1240px;
     margin-inline: auto;
     padding: clamp(3.5rem, 8vw, 6.5rem);
+  }
+
+  /* -- header on the photograph -------------------------------------------- */
+
+  .dress__header {
+    position: relative;
+    /* Contains the bubble's top margin. Without it that margin collapses
+       through the header and moves the header itself — which, since the
+       photograph is absolutely positioned inside it, takes the photograph
+       along too and lands the card back on its top edge with none of the
+       frame showing above. The 900px branch below is `display: grid`, which
+       already contains it. */
+    display: flow-root;
+    /* Full-bleed: a direct child of a section that sets no width of its own. */
+    width: 100%;
+    /* Deliberately NOT clipped. On a phone the card hangs off the bottom of the
+       photograph and onto the shell — that overhang is the whole composition,
+       and `overflow: hidden` here is what would eat it. The photograph does its
+       own clipping, one level down. */
+    background-color: var(--color-ink);
+  }
+
+  .dress__header-media {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: var(--dress-header-h);
+    overflow: hidden;
+  }
+
+  .dress__header-photo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Centred horizontally, just above the middle vertically: the two of them
+       are mid-frame and the wall fills the rest, so a wide slice taken from
+       slightly above centre keeps both of them and the painted palm. Declared,
+       like every image on this page.
+
+       No `filter`. The lift that used to be here existed only to rescue a frame
+       exposed for a single lamp; this one is daylight on a yellow wall and any
+       brightening would blow the wall out. */
+    object-position: 50% 45%;
+  }
+
+  .dress__header-wash {
+    position: absolute;
+    inset: 0;
+    /* Runs to the bottom on a phone, where the card sits under the photograph,
+       and to the right on a wide screen, where it sits beside it. Either way
+       the card's edge lands on something dark rather than on a bright patch.
+
+       Deeper than it was, because the photograph behind it is now a sunlit
+       yellow wall rather than a near-black frame — on a bright ground a light
+       wash leaves the card's edge dissolving into it. */
+    background-image: linear-gradient(
+      180deg,
+      rgb(var(--shade-rgb) / 0) 45%,
+      rgb(var(--shade-rgb) / 0.45) 100%
+    );
+  }
+
+  .dress__bubble {
+    position: relative;
+    /* Below 900px the card is full width and starts 85% of the way down the
+       photograph, so it covers the bottom 15% of it and the rest of the frame
+       stays visible above. */
+    margin: calc(var(--dress-header-h) * 0.85) clamp(1rem, 4vw, 2rem) 0;
+    padding: clamp(1.75rem, 4vw, 3rem);
+    border-radius: 24px;
+    background-color: var(--color-shell);
+    /* Ink on shell, exactly as everywhere else on the page. No text on the
+       photograph at any width. */
+    color: var(--color-ink);
+    box-shadow: 0 18px 48px rgb(var(--shade-deep-rgb) / 0.28);
+  }
+
+  @media (min-width: 900px) {
+    .dress__header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-content: center;
+      min-height: var(--dress-header-h);
+    }
+
+    .dress__header-media {
+      inset: 0;
+      height: auto;
+    }
+
+    .dress__header-wash {
+      background-image: linear-gradient(
+        90deg,
+        rgb(var(--shade-rgb) / 0) 40%,
+        rgb(var(--shade-rgb) / 0.45) 100%
+      );
+    }
+
+    .dress__bubble {
+      /* Right, with the brief's 6vw margin, and centred on the frame. In flow
+         rather than absolutely positioned, so a longer intro grows the block
+         instead of overflowing it — and when it does grow past the
+         photograph, the card is what crosses the edge. */
+      justify-self: end;
+      max-width: 30rem;
+      margin: clamp(2rem, 5vw, 3.5rem) 6vw;
+    }
   }
 
   .dress__eyebrow {
@@ -245,7 +407,9 @@ const ILLUSTRATION: Record<string, { alt: string; paths: string[] }> = {
   /* -- group selector ------------------------------------------------------ */
 
   .dress__group {
-    margin-top: clamp(2.25rem, 5vw, 3.25rem);
+    /* First thing in the shell column now that the header carries the words,
+       so it owns no top offset of its own — `.dress__inner` already pads it. */
+    margin-top: 0;
   }
 
   .dress__radio {

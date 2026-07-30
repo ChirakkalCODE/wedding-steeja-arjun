@@ -4,13 +4,13 @@ import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
 
 <section class="venue" id="venue" aria-labelledby="venue-title">
   <div class="venue__inner">
-    <p class="venue__eyebrow" data-reveal>Where</p>
-    <h2 class="venue__title" id="venue-title" data-reveal>Getting there</h2>
+    <p class="venue__eyebrow" data-anim="head">Where</p>
+    <h2 class="venue__title" id="venue-title" data-anim="head2">Getting there</h2>
 
     <ul class="venue__cards">
       {
-        EVENTS.map((event, i) => (
-          <li class="venue__card" data-reveal={i === 0 ? '' : '2'}>
+        EVENTS.map((event) => (
+          <li class="venue__card">
             <h3 class="venue__name">{event.venue}</h3>
             <p class="venue__area">{event.area}</p>
 

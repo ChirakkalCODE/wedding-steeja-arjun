@@ -14,10 +14,10 @@ const offset = utcOffset();
 
 <section class="schedule" id="schedule" aria-labelledby="schedule-title">
   <div class="schedule__inner">
-    <p class="schedule__eyebrow" data-reveal>The day</p>
-    <h2 class="schedule__title" id="schedule-title" data-reveal>{WEDDING_DATE_LABEL}</h2>
+    <p class="schedule__eyebrow" data-anim="head">The day</p>
+    <h2 class="schedule__title" id="schedule-title" data-anim="head2">{WEDDING_DATE_LABEL}</h2>
 
-    <ol class="schedule__list" data-reveal="2">
+    <ol class="schedule__list">
       {
         EVENTS.map((event) => (
           <li class="schedule__item">
@@ -42,13 +42,13 @@ const offset = utcOffset();
       }
     </ol>
 
-    <p class="schedule__closing" data-reveal="3">
+    <p class="schedule__closing">
       We kindly invite you to join us for the Holy Mass, followed by an evening of
       celebration, dinner and dancing at One Kochi. We can&rsquo;t wait to celebrate this
       special day with you.
     </p>
 
-    <p class="schedule__actions" data-reveal="3">
+    <p class="schedule__actions">
       <a class="schedule__cta" href={withBase('wedding.ics')} download="steeja-and-arjun.ics">
         Add to calendar
       </a>

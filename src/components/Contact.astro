@@ -4,15 +4,15 @@ import { CONTACTS, whatsappLink } from '../data/contacts';
 
 <section class="contact" id="contact" aria-labelledby="contact-title">
   <div class="contact__inner">
-    <p class="contact__eyebrow" data-reveal>Any questions</p>
-    <h2 class="contact__title" id="contact-title" data-reveal>We&rsquo;re happy to help</h2>
+    <p class="contact__eyebrow" data-anim="head">Any questions</p>
+    <h2 class="contact__title" id="contact-title" data-anim="head2">We&rsquo;re happy to help</h2>
 
-    <p class="contact__intro" data-reveal="2">
+    <p class="contact__intro">
       For anything at all about the wedding, please reach out to our brothers. They&rsquo;ll
       be glad to help with details, directions or anything you&rsquo;re unsure about.
     </p>
 
-    <ul class="contact__cards" data-reveal="2">
+    <ul class="contact__cards">
       {
         CONTACTS.map((contact) => (
           <li class="contact__card">

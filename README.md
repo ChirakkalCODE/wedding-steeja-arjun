@@ -3,15 +3,20 @@
 One-page wedding site for 6 September 2026, Akaparambu &amp; Nedumbassery, Kerala.
 
 **Built so far: the hero, the countdown, Our Story, the Schedule, the Venues,
-the Dress code, Travel & stay and the Gallery.** Of the top bar's links,
-`#story` and `#schedule` now resolve; `#faq` and `#rsvp` are still stubs
-awaiting their sections.
+the Dress code, Travel & stay, Moments, Q&A and Contact.** Every link in the top
+bar resolves; `#rsvp` is the one stub left, awaiting its section.
 
-The gallery is driven entirely by `src/data/gallery.ts`. Adding a photo is one
+Moments is driven entirely by `src/data/gallery.ts`. Adding a photo is one
 entry in that array — the grid, the lightbox and the reveal stagger all read
 from it. The set deliberately mixes black and white with colour and portrait
 with landscape; nothing normalises that, and the one landscape frame spans two
 columns above 640px.
+
+Two full-bleed `ImageBand`s break the page out of its content column — one
+carrying the couple's thank-you between Our Story and the Schedule, one silent
+between Travel and Moments. A fixed feTurbulence grain layer sits over the whole
+page at 3.5%; both are described where they are defined
+(`src/components/ImageBand.astro`, `src/styles/global.css`).
 
 ### Copy still to be written
 

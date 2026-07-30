@@ -13,24 +13,88 @@ const full = await Promise.all(
   ),
 );
 
-/** Staggered by index but capped, so the last tile is not still arriving after
-    the reader has scrolled past it. */
-const revealDelay = (i: number) => Math.min(i * 45, 300);
+/**
+ * The preview strip: one 24px-wide rendition of every photograph, blurred to
+ * nothing in CSS. It says "there are photographs here, and this is roughly what
+ * they look like" for about a fifth of a kilobyte each — and it is `loading:
+ * lazy` like everything else down here, so a reader who never reaches Moments
+ * pays for none of it either.
+ *
+ * Both dimensions are given so the strip reserves its exact row before a byte
+ * arrives. `getImage` would derive the height itself, but declaring it here is
+ * what puts it on the element.
+ */
+const SEED_W = 24;
+
+const seeds = await Promise.all(
+  PHOTOS.map(async (photo) => {
+    const height = Math.max(1, Math.round((SEED_W * photo.src.height) / photo.src.width));
+    const image = await getImage({
+      src: photo.src,
+      width: SEED_W,
+      height,
+      format: 'webp',
+      quality: 40,
+    });
+    return { src: image.src, width: SEED_W, height };
+  }),
+);
+
+/* Injected into the button, never typed out: the grid, the lightbox, the strip
+   and the count are all driven off the one array in src/data/gallery.ts. */
+const COUNT = PHOTOS.length;
+
+/* No reveal animation on these tiles, and that is deliberate rather than an
+   omission. The grid is now mounted by a click, long after the page's one
+   IntersectionObserver has been built and handed its targets — a `data-anim`
+   here would arm a hidden state that nothing is left to lift, which is exactly
+   the failure that made these photographs invisible in the first place. The
+   paper-2 skeleton and the image arriving over it is the reveal. */
 ---
 
-<section class="gallery" id="gallery" aria-labelledby="gallery-title">
+{/* "Moments" in the navigation and in the heading. The class names stay
+    `gallery__*` and the data still lives in `src/data/gallery.ts` — this is what
+    the section is called, not what it is. */}
+<section class="gallery" id="moments" aria-labelledby="moments-title">
   <div class="gallery__inner">
-    <p class="gallery__eyebrow" data-reveal>Moments</p>
-    <h2 class="gallery__title" id="gallery-title" data-reveal>A few of our favourites</h2>
+    <p class="gallery__eyebrow" data-anim="head">Moments</p>
+    <h2 class="gallery__title" id="moments-title" data-anim="head2">Moments we already love</h2>
   </div>
 
-  <ul class="gallery__grid">
+  {/* Rendered `hidden`, and un-hidden by the script in the same breath as it
+      takes the grid out of the document. With no script it never appears, so
+      there is never a button offering to load something that is already there. */}
+  <div class="gallery__gate" data-gate hidden>
+    <div class="gallery__seeds" aria-hidden="true">
+      {
+        seeds.map((seed) => (
+          <img
+            class="gallery__seed"
+            src={seed.src}
+            width={seed.width}
+            height={seed.height}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        ))
+      }
+    </div>
+
+    <button class="gallery__reveal" type="button" data-show>
+      Show the photos ({COUNT})
+    </button>
+  </div>
+
+  {/* In the document, not in a <template>. That is what makes the no-script
+      path free: the grid is simply here, with native lazy loading, and the
+      script's job is to take it away again — rather than the markup existing
+      twice so that one copy can be for readers without JavaScript. */}
+  <ul class="gallery__grid" data-grid>
     {
       PHOTOS.map((photo, i) => (
         <li
           class:list={['gallery__item', photo.orientation === 'landscape' && 'gallery__item--wide']}
-          data-reveal
-          style={`transition-delay:${revealDelay(i)}ms`}
         >
           {/* A figure, not a button. The script swaps it for a real <button>
               when it loads; without JavaScript this stays a plain grid rather
@@ -68,7 +132,7 @@ const revealDelay = (i: number) => Math.min(i * 45, 300);
   </ul>
 
   <div class="gallery__inner">
-    <p class="gallery__note" data-reveal>More photos will be added after the wedding.</p>
+    <p class="gallery__note">More photos will be added after the wedding.</p>
   </div>
 
   {/* Inert until showModal() is called, so it costs nothing without JS. Using
@@ -90,10 +154,38 @@ const revealDelay = (i: number) => Math.min(i * 45, 300);
   </dialog>
 </section>
 
+{/* One script, and the order inside it is load-bearing. The lightbox turns
+    every thumbnail into a real <button>, so it cannot run against a grid that
+    is sitting outside the document — it is a function here, called once, on
+    whichever path the browser actually takes:
+
+      · no script at all — none of this happens, the grid is already in the page
+        with native lazy loading and the button was never un-hidden;
+      · script, gate used — the grid comes out before layout, so not one of the
+        eight images is ever requested, and both the mount and the lightbox
+        happen on the click;
+      · script, gate missing for any reason — the grid stays where it is and the
+        lightbox is wired immediately, exactly as it was before.
+
+    Taking the grid out is a comment node swap rather than a `remove()`: the
+    comment holds the position, so the grid goes back precisely where it was
+    and the note beneath it never moves.
+
+    Six mount eagerly: two full rows on a wide screen, the first six on a
+    phone — enough that the grid is populated the instant it appears, few
+    enough that a reader who opens it and changes their mind has not paid for
+    all of them. The rest keep `lazy` and arrive as they are approached. */}
 <script is:inline>
   (function () {
-    var dialog = document.querySelector('[data-lightbox]');
-    var thumbs = [].slice.call(document.querySelectorAll('[data-thumb]'));
+    var section = document.getElementById('moments');
+    if (!section) return;
+
+    var grid = section.querySelector('[data-grid]');
+    var gate = section.querySelector('[data-gate]');
+
+    function lightbox() {
+    var dialog = section.querySelector('[data-lightbox]');
+    var thumbs = [].slice.call(section.querySelectorAll('[data-thumb]'));
     if (!dialog || !dialog.showModal || !thumbs.length) return;
 
     var img = dialog.querySelector('[data-full-img]');
@@ -170,6 +262,30 @@ const revealDelay = (i: number) => Math.min(i * 45, 300);
       if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) show(current + (dx < 0 ? 1 : -1));
       x0 = null;
     }, { passive: true });
+    }
+
+    var button = gate && gate.querySelector('[data-show]');
+
+    if (!grid || !gate || !button || !grid.parentNode) {
+      lightbox();
+      return;
+    }
+
+    var slot = document.createComment('moments');
+    grid.parentNode.replaceChild(slot, grid);
+    gate.hidden = false;
+
+    button.addEventListener('click', function () {
+      var imgs = grid.querySelectorAll('img');
+      for (var i = 0; i < imgs.length && i < 6; i++) imgs[i].loading = 'eager';
+
+      slot.parentNode.replaceChild(grid, slot);
+      gate.remove();
+      lightbox();
+
+      var first = section.querySelector('.gallery__thumb--live');
+      if (first) first.focus({ preventScroll: true });
+    });
   })();
 </script>
 
@@ -200,6 +316,70 @@ const revealDelay = (i: number) => Math.min(i * 45, 300);
     font-size: clamp(2.25rem, 5.5vw, 3.5rem);
     line-height: 1.05;
     color: var(--color-ink);
+  }
+
+  /* -- the gate ------------------------------------------------------------ */
+
+  /* `hidden` is an attribute the UA stylesheet turns into `display: none`, and
+     any `display` declared here would outrank it. Restated so the gate is
+     really absent until the script asks for it. */
+  .gallery__gate[hidden] {
+    display: none;
+  }
+
+  .gallery__gate {
+    margin-top: clamp(2rem, 4.5vw, 3rem);
+    padding-inline: clamp(1rem, 4vw, 2rem);
+  }
+
+  .gallery__seeds {
+    display: flex;
+    justify-content: center;
+    gap: clamp(0.35rem, 1vw, 0.6rem);
+    /* Fixed row, and the seeds are pinned to it by height — so the strip holds
+       its exact space from the first paint, before any of the eight tiny files
+       have arrived. */
+    height: clamp(4rem, 9vw, 5.5rem);
+    /* Clips the blur, which otherwise bleeds past both ends of the row. */
+    overflow: hidden;
+  }
+
+  .gallery__seed {
+    display: block;
+    width: auto;
+    height: 100%;
+    /* 24 pixels across, blurred past the point of being a picture. It is a
+       colour and a shape, which is all a placeholder should promise. */
+    filter: blur(9px);
+    opacity: 0.6;
+  }
+
+  .gallery__reveal {
+    display: block;
+    margin: clamp(1.5rem, 3.5vw, 2.25rem) auto 0;
+    padding: 0.95rem 1.9rem;
+    border: 0;
+    border-radius: 999px;
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+    font-family: inherit;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.25s ease;
+  }
+
+  .gallery__reveal:hover,
+  .gallery__reveal:focus-visible {
+    opacity: 0.86;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gallery__reveal {
+      transition: none;
+    }
   }
 
   /* Allowed to run wider than the 1240px text column. */
@@ -241,7 +421,12 @@ const revealDelay = (i: number) => Math.min(i * 45, 300);
     margin: 0;
     padding: 0;
     border: 0;
-    background: none;
+    /* The skeleton, and it needs no element of its own: the tile's box is
+       already the photograph's exact shape — `width`/`height` are on every
+       <img> and the CSS is `width: 100%; height: auto` — so this paper tone is
+       simply what is behind an image that has not arrived. Nothing to add on
+       load, nothing to remove, nothing that can shift. */
+    background-color: var(--color-paper-2);
     overflow: hidden;
   }
 

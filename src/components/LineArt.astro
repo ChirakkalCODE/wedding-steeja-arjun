@@ -1,0 +1,80 @@
+---
+/**
+ * One hand-drawn palm frond, drawn on as it enters the viewport.
+ *
+ * The couple's photographs are taken against a wall painted with a fan palm.
+ * This is that palm reduced to a single line: out along the rachis in one long
+ * curve, then back down the upper edge as six leaflets, each a single arc
+ * bulging away from the spine. It is one `<path>` with no lifts, which is the
+ * whole point — clip art is assembled from parts, a drawing is one movement.
+ *
+ * `pathLength="1"` normalises the geometry, so the dash values below are the
+ * fraction of the stroke rather than a measured length nobody can verify after
+ * the next edit to `d`. The resting state is fully drawn; the hidden state and
+ * the 1.4s transition live in global.css beside the rest of the scroll
+ * animation, gated on `html.anim` — so without script, or under reduced
+ * motion, the frond is simply there.
+ *
+ * `vector-effect: non-scaling-stroke` keeps the line at 1px whatever the box
+ * does; without it a frond scaled to 320px would be drawn with a fatter line
+ * than the same frond at 180px.
+ *
+ * `aria-hidden`, and the box has a fixed height, so it reserves its space up
+ * front and contributes nothing to the accessibility tree or to CLS.
+ */
+interface Props {
+  /** Mirrors the frond and moves it to the other side of the page. */
+  flip?: boolean;
+}
+
+const { flip = false } = Astro.props;
+---
+
+<div class:list={['line-art', flip && 'line-art--flip']} aria-hidden="true" data-anim="line">
+  <svg class="line-art__svg" viewBox="0 0 340 240" fill="none" focusable="false">
+    <path
+      class="line-art__path"
+      pathLength="1"
+      d="M14 214C90 200 200 150 312 56Q268 28 268 80Q224 52 224 104Q180 76 180 128Q136 101 136 154Q92 127 92 180Q48 153 48 206"
+    ></path>
+  </svg>
+</div>
+
+<style>
+  .line-art {
+    display: flex;
+    /* Off to one side rather than centred: a decoration on the axis of the page
+       reads as a divider, and this is meant to be something the eye finds
+       rather than something it is handed. */
+    justify-content: flex-start;
+    height: clamp(5.5rem, 11vw, 9rem);
+    padding-inline: clamp(1.5rem, 8vw, 6rem);
+    overflow: hidden;
+  }
+
+  .line-art--flip {
+    justify-content: flex-end;
+  }
+
+  .line-art__svg {
+    width: clamp(11rem, 26vw, 20rem);
+    height: 100%;
+  }
+
+  .line-art--flip .line-art__svg {
+    scale: -1 1;
+  }
+
+  .line-art__path {
+    fill: none;
+    stroke: var(--color-ochre);
+    stroke-opacity: 0.35;
+    stroke-width: 1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    /* Whole, at rest. global.css sets the offset to 1 and animates it back. */
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+</style>

@@ -4,11 +4,11 @@ import { FAQ } from '../data/faq';
 
 <section class="faq" id="faq" aria-labelledby="faq-title">
   <div class="faq__inner">
-    <p class="faq__eyebrow" data-reveal>Good to know</p>
-    <h2 class="faq__title" id="faq-title" data-reveal>Questions &amp; answers</h2>
-    <p class="faq__intro" data-reveal="2">Have a question? You may find the answer here.</p>
+    <p class="faq__eyebrow" data-anim="head">Good to know</p>
+    <h2 class="faq__title" id="faq-title" data-anim="head2">Questions &amp; answers</h2>
+    <p class="faq__intro">Have a question? You may find the answer here.</p>
 
-    <div class="faq__list" data-reveal="2">
+    <div class="faq__list">
       {
         FAQ.map((item) => (
           // Native disclosure: open and close cost no JavaScript, and the

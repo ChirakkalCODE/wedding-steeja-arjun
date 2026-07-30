@@ -1,43 +1,91 @@
 ---
 /**
- * Fixed navigation with two states.
+ * A floating navigation capsule, and one monogram that travels into it.
  *
- * The solid state is the CSS default and the transparent one is added by
- * script. That inversion is deliberate: with JavaScript unavailable the bar
- * renders solid and legible over the photograph rather than as invisible text
- * on a busy image. Both states share identical padding and a 1px border — the
- * hero state simply makes the border transparent — so switching cannot move a
- * single pixel of the page.
+ * Over the hero there is no bar at all. The monogram sits inside the invitation
+ * frame, top left of the card, in the handwriting face and in shell — part of
+ * the card rather than furniture laid over it. Once the hero's bottom edge is
+ * past, the capsule fades in and stays, whichever way the page is then scrolled.
+ * Nothing hides on scroll: a bar that comes and goes with direction is a bar the
+ * reader has to think about, and this one has six links and a reply button that
+ * should simply be there.
  *
- * State is driven by a 1px sentinel appended to the hero by the script, never a
- * scroll listener. The sentinel sits below the fold at rest and above it once
- * the hero is past, so `isIntersecting` alone cannot tell the two apart; the
- * sign of `boundingClientRect.top` is what distinguishes them.
+ * The monogram is ONE element, not two that cross-fade. It is `position: fixed`
+ * from the first frame and never occupies flow space, so it cannot shift
+ * layout in either state. Two sets of values describe the two positions and a
+ * 420ms cubic-bezier(.16, 1, .3, 1) transition on transform, font-size and
+ * colour moves between them. Deliberately not the View Transitions API: this is
+ * one element moving inside one document, and nothing about it is a navigation.
  *
- * Gallery and Contact are deliberately absent from the row: at five links plus
- * the pill it already fills the width of a small laptop, and both are reachable
- * from the page itself.
+ * Its hero anchor is pure CSS — the invitation frame's own `--frame-inset` plus
+ * a `--mono-inset`, so it is the card's corner by construction and not by
+ * measurement. Its capsule anchor cannot be: the capsule is `width: max-content`
+ * and centred, so where the monogram lands depends on how wide the row of links
+ * happens to be. That one number is measured, from a hidden slot that carries
+ * the same two glyphs at the same size, and it is read exactly three times —
+ * on load, when the handwriting face finishes swapping in (which changes the
+ * capsule's width), and on resize. Never on scroll.
+ *
+ * Because the slot is the monogram — same markup, same rules, same font-size —
+ * the landing is exact rather than approximated, and the two can never drift
+ * apart when one of them is edited.
+ *
+ * Without JavaScript the whole mechanism inverts cleanly: `.mono` is
+ * `display: none`, the slot is simply visible, and the capsule renders solid
+ * and complete from the first frame. Exactly one of the two monograms is ever
+ * in the accessibility tree — the slot is removed from it by `visibility:
+ * hidden` when the script is running, and `.mono` is removed by `display: none`
+ * when it is not.
  *
  * The script below is written tight rather than airy, and that is a budget
  * decision: Astro leaves `is:inline` scripts exactly as written, so comments
- * and indentation are shipped bytes. The whole navigation has under 2 kB to
- * work in, so the explanation lives here, where it compiles away to nothing.
+ * and indentation are shipped bytes. The explanation lives here, where it
+ * compiles away to nothing.
  *
  * What it does, in order:
  *
- *  1. Appends a 1px sentinel to the bottom of the hero and observes it. The
+ *  1. Measures the gap between the monogram's hero anchor and its capsule slot,
+ *     and writes it to `--mono-dx` / `--mono-dy`. `left`/`top` are read from
+ *     the computed style rather than from a rect, because a rect already has
+ *     the travel transform baked into it and would feed its own output back in.
+ *
+ *     It is measured on load, again once the handwriting face has swapped in,
+ *     on resize — and once more at the top of the sentinel callback, which is
+ *     the only one of the four that is guaranteed to be exact. The first three
+ *     are all bets about when layout has settled, and a load-time reading came
+ *     out a third of a pixel short of a reading taken afterwards. The callback
+ *     runs at most a handful of times in a visit, it is a state change rather
+ *     than a scroll handler, and it reads the geometry at the instant the
+ *     travel is about to start — so the landing is exact rather than nearly.
+ *     `visibility: hidden` still lays out, so the slot has a real box to read
+ *     whichever state the capsule is in.
+ *
+ *  2. Appends a 1px sentinel to the bottom of the hero and observes it. The
  *     sentinel is below the fold at rest and above the viewport once the hero
  *     is past, so `isIntersecting` is false in both cases; the sign of
- *     `boundingClientRect.top` is what separates them. Positive means the hero
- *     is still on screen, which adds the transparent class.
+ *     `boundingClientRect.top` is what separates them. That one boolean goes
+ *     through a single `set()` that moves the capsule and the monogram
+ *     together, so the two can never end up in different states.
  *
- *  2. Scrollspy. One observer over the five linked sections with a
- *     `-45%` inset top and bottom, so a section only counts once it reaches the
- *     middle band of the viewport. Results are kept in a map and the first
- *     match in document order wins, which is what guarantees that exactly one
- *     link is ever `aria-current`.
+ *     `set()` is called three ways, and the second and third are both there
+ *     because the CSS defaults on their own describe a state that does not
+ *     exist — capsule shown, monogram still at the card. It is called once
+ *     synchronously from the sentinel's own geometry, which is correct
+ *     whether the page opened at the top or was restored mid-scroll and costs
+ *     no frame of the wrong thing; by the observer thereafter; and once from a
+ *     two-second dead man's switch that falls back to the capsule if the
+ *     observer never reports at all. The same reasoning as the reveal
+ *     observer's switch in index.astro, and the same measured failure behind
+ *     it: an environment that never composites delivers no entries, and
+ *     everything downstream of "the observer will tell us" is then wrong
+ *     forever.
  *
- *  3. The mobile dialog. `showModal()` brings focus trapping and Escape from
+ *  3. Scrollspy. One observer over the six linked sections with a `-45%` inset
+ *     top and bottom, so a section only counts once it reaches the middle band
+ *     of the viewport. Results are kept in a map and the first match in document
+ *     order wins, which guarantees exactly one link is ever `aria-current`.
+ *
+ *  4. The mobile dialog. `showModal()` brings focus trapping and Escape from
  *     the platform. Body scroll is locked by pinning `position: fixed` with a
  *     negative `top`, and every exit path — the close button, Escape, the
  *     backdrop — funnels through the one `close` listener that unlocks,
@@ -51,28 +99,48 @@ const NAV = [
   { label: 'Schedule', href: '#schedule' },
   { label: 'Dress code', href: '#dresscode' },
   { label: 'Travel', href: '#travel' },
+  { label: 'Moments', href: '#moments' },
   { label: 'Q&A', href: '#faq' },
 ] as const;
+
+const CTA = 'Let us know';
 ---
 
-{/* Runs before the header is parsed, so the burger is never painted in the
-    state that would be wrong for it — no flash of the wrong control. */}
+{/* Runs before the header is parsed, so neither the burger nor the monogram is
+    ever painted in the state that would be wrong for it. */}
 <script is:inline>document.documentElement.classList.add('nav-js');</script>
 
 <a class="skip" href="#main">Skip to content</a>
 
-<!-- Deliberately NOT carrying the `rise` entrance class, and this is load-
-     bearing rather than an oversight. Chrome excludes an image that covers the
-     whole viewport from being a Largest Contentful Paint candidate (verified:
-     at `inset: 1px` the hero photo becomes the LCP, at `inset: 0` it does not),
-     so the hero photograph can never be this page's LCP element. The entrance
-     animation starts every other text element at opacity 0, which disqualifies
-     those too — leaving the page with no LCP candidate at all, which in turn
-     makes Lighthouse's default simulated run fail outright with NO_LCP rather
-     than score it. Painting the wordmark immediately gives the page a real
-     first contentful element. -->
-<header class="topbar" id="topbar">
-  <p class="topbar__mark">Steeja <em>&amp;</em> Arjun</p>
+{/* "S & A": the two initials in the handwriting face, the ampersand in italic
+    Instrument Serif at 0.8em. The contrast between the two typefaces at two
+    sizes is the whole mark — it is not a logo, it is a signature.
+
+    Before the header in document order so a screen reader meets the signature
+    and then the navigation, which is the order they are in on the screen.
+
+    It also gives the page a first contentful element that paints immediately:
+    Chrome excludes an image covering the whole viewport from being a Largest
+    Contentful Paint candidate, so the hero photograph can never be this page's
+    LCP, and every other text element above the fold starts at opacity 0 under
+    the entrance animation. This one does not, in either state. */}
+<p class="mono" id="mono">S <em>&amp;</em> A</p>
+
+{/* `topbar--hero` is server-rendered, and the hidden state it names is gated on
+    `.nav-js` in the CSS. That pairing is what keeps the capsule off the hero
+    from the very first frame: `.nav-js` is added by the one-line script above,
+    synchronously, before this element is parsed — so with script the capsule is
+    hidden before it can ever paint, and the measured flash of a bar sitting over
+    the invitation on a slowly-delivered document does not happen. Without
+    script the class is inert, because nothing gates on it, and the bar renders
+    solid and complete as it must. */}
+<header class="topbar topbar--hero" id="topbar">
+  {/* Reserves the monogram's place in the row. Identical markup to `.mono`
+      above, so it is the same width at the same font-size and the measured
+      landing is exact — and so that editing one without the other is not
+      possible without noticing. Hidden, not absent: the row's width has to
+      include it. Visible, and the only monogram, when there is no script. */}
+  <p class="topbar__slot">S <em>&amp;</em> A</p>
 
   <nav class="topbar__nav" aria-label="Sections of this page">
     <ul class="topbar__list">
@@ -89,7 +157,7 @@ const NAV = [
   </nav>
 
   <div class="topbar__end">
-    <a class="topbar__pill" href="#rsvp">Reply</a>
+    <a class="topbar__pill" href="#contact">{CTA}</a>
 
     <button
       class="topbar__burger"
@@ -125,8 +193,8 @@ const NAV = [
         ))
       }
       <li>
-        <a class="menu__link menu__link--reply" href="#rsvp">
-          Reply
+        <a class="menu__link menu__link--cta" href="#contact">
+          {CTA}
         </a>
       </li>
     </ul>
@@ -138,9 +206,18 @@ const NAV = [
 function n(){
 var b=document.getElementById('topbar');
 if(!b||!('IntersectionObserver' in window))return;
-var h=document.querySelector('main > section'),i;
+var m=document.getElementById('mono'),q=b.querySelector('.topbar__slot'),i,place=function(){};
+if(m&&q){place=function(){var c=getComputedStyle(m),r=q.getBoundingClientRect();
+m.style.setProperty('--mono-dx',(r.left-parseFloat(c.left))+'px');
+m.style.setProperty('--mono-dy',(r.top-parseFloat(c.top))+'px')};
+place();addEventListener('resize',place,{passive:true});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(place)}
+var h=document.querySelector('main > section');
 if(h){var s=document.createElement('div');s.className='topbar__sentinel';h.appendChild(s);
-new IntersectionObserver(function(e){b.classList.toggle('topbar--hero',e[0].boundingClientRect.top>0)}).observe(s)}
+var seen=0,set=function(v){place();b.classList.toggle('topbar--hero',v);if(m)m.classList.toggle('mono--bar',!v)};
+set(s.getBoundingClientRect().top>0);
+new IntersectionObserver(function(e){seen=1;set(e[0].boundingClientRect.top>0)}).observe(s);
+setTimeout(function(){if(!seen)set(false)},2000)}
 var L=b.querySelectorAll('.topbar__link'),ids=[],map={},els=[];
 for(i=0;i<L.length;i++){var id=L[i].getAttribute('href').slice(1),el=document.getElementById(id);
 if(el){ids.push(id);map[id]=L[i];els.push(el)}}
@@ -151,14 +228,14 @@ for(k=0;k<ids.length;k++)if(live[ids[k]]){c=ids[k];break}
 for(k=0;k<ids.length;k++)ids[k]===c?map[ids[k]].setAttribute('aria-current','true'):map[ids[k]].removeAttribute('aria-current')
 },{rootMargin:'-45% 0px -45% 0px'});
 for(i=0;i<els.length;i++)spy.observe(els[i]);
-var m=document.getElementById('nav-menu'),t=document.getElementById('nav-toggle');
-if(!m||!t||!m.showModal)return;
+var mm=document.getElementById('nav-menu'),t=document.getElementById('nav-toggle');
+if(!mm||!t||!mm.showModal)return;
 var y=0,go=null;
-t.addEventListener('click',function(){y=scrollY;m.showModal();t.setAttribute('aria-expanded','true');
+t.addEventListener('click',function(){y=scrollY;mm.showModal();t.setAttribute('aria-expanded','true');
 document.body.style.cssText='position:fixed;left:0;right:0;top:'+-y+'px'});
-m.addEventListener('click',function(e){if(e.target.closest('[data-nav-close]'))return m.close();
-var a=e.target.closest('a[href^="#"]');if(!a)return;e.preventDefault();go=a.getAttribute('href');m.close()});
-m.addEventListener('close',function(){document.body.style.cssText='';scrollTo({top:y,behavior:'instant'});
+mm.addEventListener('click',function(e){if(e.target.closest('[data-nav-close]'))return mm.close();
+var a=e.target.closest('a[href^="#"]');if(!a)return;e.preventDefault();go=a.getAttribute('href');mm.close()});
+mm.addEventListener('close',function(){document.body.style.cssText='';scrollTo({top:y,behavior:'instant'});
 t.setAttribute('aria-expanded','false');t.focus();
 if(!go)return;var d=document.querySelector(go);go=null;if(d)d.scrollIntoView()});
 }
@@ -168,19 +245,22 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
 
 <style>
   :global(:root) {
-    --bar-pad-y: clamp(0.9rem, 2.2vw, 1.6rem);
-    /* Height of the tallest thing in the row: the Reply pill on a wide screen,
-       the 48px hamburger once it appears. */
-    --bar-content: 2rem;
-    /* Two paddings, that content and the hairline. Feeds the anchor offset
-       below, so no target can end up hidden behind the bar. */
-    --bar-h: calc(2 * var(--frame-inset) + 2 * var(--bar-pad-y) + var(--bar-content) + 1px);
-  }
+    /* The gap between the viewport top and the capsule. */
+    --bar-top: 1rem;
+    --bar-h: calc(var(--bar-top) + 52px);
 
-  @media (max-width: 819.98px) {
-    :global(:root) {
-      --bar-content: 3rem;
-    }
+    /* The monogram's inset from the invitation frame's border. Comfortably
+       clear of the frame's 6px inner rule. */
+    --mono-inset: clamp(1rem, 2.6vw, 1.75rem);
+    --mono-hero-size: clamp(1.7rem, 3.2vw, 2.2rem);
+    --mono-bar-size: 1.6rem;
+
+    /* What the hero has to hold its content clear of, which over the hero is
+       the monogram and nothing else: its anchor plus its own line box at the
+       1.1 line-height declared on `.mono` below. The two move together. */
+    --bar-h-hero: calc(
+      var(--frame-inset) + var(--mono-inset) + var(--mono-hero-size) * 1.1
+    );
   }
 
   :global(main > section) {
@@ -212,34 +292,99 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
     transform: translateY(0);
   }
 
-  .topbar {
+  /* -- the travelling monogram --------------------------------------------- */
+
+  .mono {
+    /* Only with script. Without it the capsule's own slot is the monogram. */
+    display: none;
     position: fixed;
-    inset: 0 0 auto 0;
-    z-index: 30;
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1.25rem;
-    /* Clears the invitation frame rather than crossing it. Identical in both
-       states — this is what keeps the switch free of layout shift. */
-    padding: calc(var(--frame-inset) + var(--bar-pad-y))
-      calc(var(--frame-inset) + clamp(0.9rem, 2.4vw, 1.9rem));
-    background-color: rgb(var(--shell-rgb) / 0.92);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid rgb(var(--ink-rgb) / 0.12);
-    color: var(--color-ink);
+    /* Above the capsule shell, so it reads as sitting in the capsule rather
+       than under its backdrop blur. */
+    z-index: 31;
+    top: calc(var(--frame-inset) + var(--mono-inset));
+    left: calc(var(--frame-inset) + var(--mono-inset));
+    margin: 0;
+    font-family: var(--font-script);
+    font-size: var(--mono-hero-size);
+    line-height: 1.1;
+    white-space: nowrap;
+    color: var(--color-shell);
+    /* Over a photograph, not over paper. Dropped on arrival. */
+    text-shadow: 0 1px 14px rgb(var(--shade-deep-rgb) / 0.45);
+    /* Never a pointer target: it is a mark, not a control, and in the capsule
+       it sits over the shell that the capsule's own hit area covers. */
+    pointer-events: none;
     transition:
-      background-color 0.25s ease,
-      border-color 0.25s ease,
-      color 0.25s ease;
+      transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+      font-size 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+      color 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+      text-shadow 0.42s ease;
   }
 
-  .topbar--hero {
-    background-color: transparent;
-    backdrop-filter: none;
-    /* Transparent, not removed: the 1px still occupies its row. */
-    border-bottom-color: transparent;
-    color: var(--color-shell);
+  :global(.nav-js) .mono {
+    display: block;
+  }
+
+  /* The travel. `--mono-dx` / `--mono-dy` are written by the script; until they
+     are, the fallbacks leave the monogram exactly where CSS put it, so the
+     first frame is correct whether or not the measurement has happened. */
+  .mono--bar {
+    transform: translate3d(var(--mono-dx, 0px), var(--mono-dy, 0px), 0);
+    font-size: var(--mono-bar-size);
+    color: var(--color-ink);
+    text-shadow: none;
+  }
+
+  .mono em {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 0.8em;
+  }
+
+  /* -- the capsule --------------------------------------------------------- */
+
+  .topbar {
+    position: fixed;
+    top: var(--bar-top);
+    left: 50%;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    /* Between the three groups. The link row sets its own, tighter spacing. */
+    gap: 1.4rem;
+    /* Sized by what is in it, never by the viewport. `max-width` is the only
+       thing that knows about the screen, and only so a no-JS link row on a
+       narrow phone wraps inside the capsule instead of running off it. */
+    width: max-content;
+    max-width: calc(100vw - 2 * var(--bar-top));
+    height: 52px;
+    padding-inline: 1.1rem;
+    border: 1px solid rgb(var(--ink-rgb) / 0.1);
+    border-radius: 999px;
+    background-color: rgb(var(--shell-rgb) / 0.88);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgb(36 28 24 / 0.08);
+    color: var(--color-ink);
+    transform: translate3d(-50%, 0, 0);
+    transition: opacity 0.25s ease;
+  }
+
+  /* Over the hero there is no bar. Not transparent — gone: with the monogram
+     travelling out of the capsule there is nothing left up there that a
+     transparent shell would be holding.
+
+     Gated on `.nav-js` so that the server-rendered `topbar--hero` above is
+     inert without script. It is the only rule that hides the capsule, so this
+     is the one place that decides whether a reader with no JavaScript ever
+     sees the navigation. */
+  :global(.nav-js) .topbar--hero {
+    opacity: 0;
+    /* Waits out the fade on the way to hidden; on the way in the base rule has
+       no delay, so the capsule is focusable the instant it starts appearing. */
+    visibility: hidden;
+    transition:
+      opacity 0.25s ease,
+      visibility 0s linear 0.25s;
   }
 
   /* Global: the script creates this element, so it never carries Astro's
@@ -254,22 +399,60 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
     pointer-events: none;
   }
 
-  .topbar__mark {
-    font-family: var(--font-display);
-    font-size: clamp(1.05rem, 2.4vw, 1.35rem);
-    line-height: 1.2;
-    letter-spacing: 0.01em;
+  /* -- the monogram's place in the row ------------------------------------- */
+
+  .topbar__slot {
+    /* Never shrinks and never grows: the one element in the row whose width
+       changes when the handwriting face swaps in over `cursive`, which is why
+       the script re-measures on `fonts.ready`. */
+    flex: none;
+    margin: 0;
+    font-family: var(--font-script);
+    font-size: var(--mono-bar-size);
+    line-height: 1.1;
     white-space: nowrap;
   }
 
-  .topbar__mark em {
+  .topbar__slot em {
+    font-family: var(--font-display);
     font-style: italic;
+    font-size: 0.8em;
+  }
+
+  /* Holds its width and its place in the row, but is neither painted nor in the
+     accessibility tree — `.mono` is the one the reader gets. */
+  :global(.nav-js) .topbar__slot {
+    visibility: hidden;
+  }
+
+  /* -- the half that only exists after the hero ---------------------------- */
+
+  .topbar__nav,
+  .topbar__end {
+    /* The delay is the monogram's travel time: the links arrive after it has
+       landed, not alongside it. */
+    transition: opacity 0.25s ease 0.42s;
+  }
+
+  /* Gated for the same reason as the capsule's own hidden state above: the
+     class ships in the HTML, so without script it must hide nothing. */
+  :global(.nav-js) .topbar--hero .topbar__nav,
+  :global(.nav-js) .topbar--hero .topbar__end {
+    opacity: 0;
+    visibility: hidden;
+    /* Leaving is not a staged exit — the whole capsule is going. */
+    transition:
+      opacity 0.15s ease,
+      visibility 0s linear 0.15s;
   }
 
   .topbar__list {
     display: flex;
     align-items: baseline;
-    gap: clamp(1.1rem, 2.6vw, 2.1rem);
+    /* Fixed, not a clamp. The capsule is sized by its content rather than by
+       the viewport, so there is nothing for a fluid gap to respond to — and
+       compact is the point of the capsule. */
+    gap: 1.1rem;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -277,7 +460,7 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
 
   .topbar__link {
     display: inline-block;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     line-height: 1.2;
     letter-spacing: 0.16em;
     text-transform: uppercase;
@@ -307,7 +490,7 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
   .topbar__end {
     display: flex;
     align-items: center;
-    gap: clamp(0.6rem, 1.6vw, 1rem);
+    gap: 0.6rem;
   }
 
   .topbar__pill {
@@ -321,16 +504,11 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
     letter-spacing: 0.16em;
     text-transform: uppercase;
     text-decoration: none;
+    white-space: nowrap;
     color: currentColor;
     transition:
       background-color 0.25s ease,
       color 0.25s ease;
-  }
-
-  .topbar--hero .topbar__pill:hover,
-  .topbar--hero .topbar__pill:focus-visible {
-    background-color: var(--color-shell);
-    color: var(--color-ink);
   }
 
   .topbar__pill:hover,
@@ -363,19 +541,68 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
   }
 
   @media (max-width: 819.98px) {
-    :global(.nav-js) .topbar__list {
+    :global(.nav-js) .topbar__nav {
       display: none;
     }
 
     :global(.nav-js) .topbar__burger {
       display: flex;
     }
-  }
 
-  /* Without script the row simply stays, wrapping if it must. */
-  @media (max-width: 819.98px) {
+    /* The burger is 48px, which is 2px taller than the capsule's content box
+       once the hairline is taken off both edges. Everything else in the row is
+       shorter than the capsule, so the 48px target is kept and the box it sits
+       in is what gives. */
+    :global(.nav-js) .topbar__burger {
+      height: 44px;
+    }
+
+    /* Without script, below 820px, the bar stops floating and joins the page.
+       It has to: the capsule is `width: max-content` capped at the viewport,
+       and six uppercase labels plus a pill are 424px of min-content — on a
+       375px phone the row ran 84px past the screen with "Q&A" entirely off it
+       and no horizontal scroll to reach it, because a fixed element
+       contributes nothing to scrollable overflow. Wrapping the row inside a
+       floating capsule only moves the problem: the block then stands 155px
+       tall while `--bar-h` still promises 68px, so it covers the hero's
+       eyebrow and every anchor jump lands behind it.
+
+       In flow, both problems stop existing rather than being compensated for.
+       The bar takes its own space at the top of the document, pushes the hero
+       down by exactly its own height whatever that turns out to be, and can
+       overlap nothing. `--bar-h` is then only ever consulted for the state it
+       describes — the floating 52px capsule, which is the `.nav-js` branch
+       below. */
     .topbar {
+      position: static;
+      transform: none;
+      width: auto;
+      max-width: none;
+      height: auto;
+      min-height: 52px;
       flex-wrap: wrap;
+      padding-block: 0.5rem;
+      border-width: 0 0 1px;
+      border-radius: 0;
+    }
+
+    /* The row itself, not just the three groups around it. `.topbar`'s own
+       `flex-wrap` stacks slot / nav / end; it cannot break the <ul>. */
+    .topbar__list {
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
+    }
+
+    :global(.nav-js) .topbar {
+      position: fixed;
+      transform: translate3d(-50%, 0, 0);
+      width: max-content;
+      max-width: calc(100vw - 2 * var(--bar-top));
+      height: 52px;
+      flex-wrap: nowrap;
+      padding-block: 0;
+      border-width: 1px;
+      border-radius: 999px;
     }
   }
 
@@ -454,14 +681,19 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
     text-decoration: none;
   }
 
-  .menu__link--reply {
+  .menu__link--cta {
     margin-top: 1rem;
     color: var(--color-ochre);
   }
 
+  /* No movement: the monogram is in one place or the other, and the capsule
+     simply appears. */
   @media (prefers-reduced-motion: reduce) {
     .skip,
+    .mono,
     .topbar,
+    .topbar__nav,
+    .topbar__end,
     .topbar__link,
     .topbar__pill {
       transition: none;

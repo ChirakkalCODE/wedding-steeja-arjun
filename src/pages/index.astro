@@ -2,19 +2,26 @@
 import instrumentSerif from '@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2';
 import instrumentSerifItalic from '@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2';
 import interVariable from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2';
+import shadowsIntoLightTwo from '@fontsource/shadows-into-light-two/files/shadows-into-light-two-latin-400-normal.woff2';
 
 import Contact from '../components/Contact.astro';
 import Countdown from '../components/Countdown.astro';
 import Dresscode from '../components/Dresscode.astro';
 import Footer from '../components/Footer.astro';
 import Faq from '../components/Faq.astro';
+import FilmStrip from '../components/FilmStrip.astro';
 import Gallery from '../components/Gallery.astro';
 import Hero from '../components/Hero.astro';
+import ImageBand from '../components/ImageBand.astro';
+import LineArt from '../components/LineArt.astro';
 import Schedule from '../components/Schedule.astro';
 import Story from '../components/Story.astro';
 import TopBar from '../components/TopBar.astro';
 import Travel from '../components/Travel.astro';
 import Venue from '../components/Venue.astro';
+
+// Derived 1920px master, not the 4672x7008 original — see prepare-media.mjs.
+import lanternPhoto from '../assets/photos/gallery/EPK03505.jpg';
 import {
   heroMedia,
   PHONE_MEDIA,
@@ -61,6 +68,16 @@ const fontFaces = [
     style: 'normal',
     weight: '100 900',
     url: interVariable,
+  },
+  /* The handwriting accent, used in exactly two places: the top bar's monogram
+     and the signature under the band quote. Registered here with the others so
+     there is still only one stylesheet, but deliberately NOT preloaded below —
+     see the note beside the preload links. */
+  {
+    family: 'Shadows Into Light Two',
+    style: 'normal',
+    weight: '400',
+    url: shadowsIntoLightTwo,
   },
 ]
   .map(
@@ -109,7 +126,14 @@ const fontFaces = [
          gate the Largest Contentful Paint: the wordmark is the LCP element (the
          full-bleed photo is disqualified — see the note in TopBar.astro) and it
          contains an italic ampersand, so it needs the italic face too. Left to
-         font matching the italic is discovered a round trip late. -->
+         font matching the italic is discovered a round trip late.
+
+         Three, not four. Shadows Into Light Two is registered above but stays
+         off the critical path: it dresses two glyphs in the top-bar monogram,
+         which paints at the first frame in the `cursive` fallback either way,
+         and nothing on the page is laid out against that monogram's right edge
+         (see the note on .topbar__mark). Preloading it would put 15 kB in front
+         of the two Instrument Serif files that gate the real LCP element. -->
     <link rel="preload" as="font" type="font/woff2" href={instrumentSerif} crossorigin />
     <link rel="preload" as="font" type="font/woff2" href={instrumentSerifItalic} crossorigin />
     <link rel="preload" as="font" type="font/woff2" href={interVariable} crossorigin />
@@ -139,38 +163,110 @@ const fontFaces = [
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 
-    <!-- One observer for every revealing block on the page, and the class that
-         arms the hidden state. It runs here, in the head, so the hidden state is
-         in effect before first paint — set up after DOMContentLoaded instead and
-         the sections paint, then vanish, then fade back in. Bails out entirely
-         under prefers-reduced-motion: no class, no observer, nothing to undo. -->
+    <!-- One observer for the three things on this page that animate as it is
+         read — headings, images and the two drawn fronds — and the class that
+         arms their hidden state. It runs here, in the head, so the hidden state
+         is in effect before first paint; set up after DOMContentLoaded instead
+         and a heading paints, vanishes, then fades back in. Bails out entirely
+         under prefers-reduced-motion: no class, no observer, nothing to undo.
+         Everything else on the page — body copy, list items, captions — carries
+         no attribute and simply exists. -->
+    {/* Astro strips this comment at build; the HTML comments around it ship,
+        which is why the long version lives here and the script below carries
+        almost none.
+
+        `live` is flipped by the observer's first delivery of any kind — it
+        reports every target it is handed on its first pass, intersecting or
+        not — so in a working browser it is true within a frame or two.
+
+        The timeout is a dead man's switch, and it exists because of a real
+        failure rather than a hypothetical one. The armed state hides an image
+        completely (`clip-path: inset(100%)`), so anything that stops the
+        observer delivering does not degrade the animation, it deletes the
+        photograph: an embedded or background view that never composites a
+        frame, a tab that is snapshotted rather than rendered, a browser quirk.
+        So the rule is now that nothing may hide content it cannot also reveal,
+        and there are four independent ways this page keeps that promise. Three
+        of them are below; the fourth is the `js` class itself, which is what the
+        CSS gates on — no script, no hidden state, ever. */}
     <script is:inline>
       (function () {
+        /* Synchronously, before a single section below is parsed. Every hidden
+           start state in global.css hangs off this class, so an element can only
+           ever start hidden on a page where scripting is confirmed to run. */
+        document.documentElement.classList.add('js');
+
         if (
           window.matchMedia &&
           window.matchMedia('(prefers-reduced-motion: reduce)').matches
         ) {
           return;
         }
-        if (!('IntersectionObserver' in window)) return;
 
-        document.documentElement.classList.add('reveal');
+        function start() {
+          var targets = document.querySelectorAll('[data-anim]');
+          var i;
 
-        document.addEventListener('DOMContentLoaded', function () {
+          function reveal(el) {
+            el.classList.add('is-in');
+          }
+
+          /* Floor one: no observer, no animation, everything visible now. */
+          if (!('IntersectionObserver' in window)) {
+            for (i = 0; i < targets.length; i++) reveal(targets[i]);
+            return;
+          }
+
           var observer = new IntersectionObserver(
             function (entries) {
-              for (var i = 0; i < entries.length; i++) {
-                if (!entries[i].isIntersecting) continue;
-                entries[i].target.classList.add('is-in');
-                observer.unobserve(entries[i].target);
+              for (var j = 0; j < entries.length; j++) {
+                if (!entries[j].isIntersecting) continue;
+                reveal(entries[j].target);
+                observer.unobserve(entries[j].target);
               }
             },
-            { rootMargin: '0px 0px -12% 0px', threshold: 0.05 },
+            { rootMargin: '0px 0px -10% 0px', threshold: 0.05 },
           );
 
-          var targets = document.querySelectorAll('[data-reveal]');
-          for (var i = 0; i < targets.length; i++) observer.observe(targets[i]);
-        });
+          for (i = 0; i < targets.length; i++) observer.observe(targets[i]);
+
+          /* Floor two: anything already on screen is revealed right now, from
+             its own geometry, rather than waiting for the observer's first
+             delivery or for a scroll that may never come. */
+          for (i = 0; i < targets.length; i++) {
+            var box = targets[i].getBoundingClientRect();
+            if (box.top < window.innerHeight && box.bottom > 0) {
+              reveal(targets[i]);
+              observer.unobserve(targets[i]);
+            }
+          }
+
+          /* Floor three, and the one that ends this class of bug: 2.5s after
+             load the gate itself comes off, which drops every hidden start
+             state on the page at once.
+
+             Deliberately the gate rather than a per-element `is-in` sweep.
+             Adding `is-in` sets the end values but still asks a transition to
+             travel to them, and a transition is one more thing that has to
+             work — in a view that never composites a frame the computed value
+             stays at `inset(100%)` forever even though the class is there,
+             which is precisely how this bug kept surviving its own fixes.
+             Removing the gate needs nothing to run: the start state stops
+             existing and the pixels are simply there.
+
+             The cost is real and worth naming: after this fires, nothing new
+             animates on scroll. That is the trade — a static page that can be
+             read beats an animated one that sometimes cannot. */
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              document.documentElement.classList.remove('js');
+            }, 2500);
+          });
+        }
+
+        document.readyState !== 'loading'
+          ? start()
+          : document.addEventListener('DOMContentLoaded', start);
       })();
     </script>
   </head>
@@ -184,12 +280,46 @@ const fontFaces = [
       <Hero />
       <Countdown />
       <Story />
+
+      {/* Was a single tall band of the lantern frame. The black and white
+          photographs were never going to work one at a time on a warm paper
+          shell — as a strip on ink they are a set, and the band that used to
+          sit here has moved down to close the Schedule instead. */}
+      <FilmStrip />
+
       <Schedule />
+
+      {/* The one full-width photograph left on the page, and it is pacing
+          rather than content — it carries the single line addressed to the
+          reader. A direct child of <main>, which sets no width, so it is edge
+          to edge without a breakout hack.
+
+          Every crop is decided here. 21:9 loses the top of the lantern and that
+          is the right trade on a wide screen — the couple are lower right and
+          the light is what the frame is about. Below 900px the same slice would
+          be a hundred pixels tall, so it becomes 4:5 and keeps both. */}
+      <ImageBand
+        image={lanternPhoto}
+        alt="Black and white: a street lamp burning above a narrow lane at night, with Steeja and Arjun standing close together beneath it, foreheads almost touching."
+        quote="We're so grateful to celebrate this unforgettable day with you."
+        attribution="Steeja & Arjun"
+        ratio="21 / 9"
+        ratioNarrow="4 / 5"
+        focalPoint="62% 58%"
+      />
+
       <Venue />
+      <LineArt />
       <Dresscode />
       <Travel />
+
+      {/* The embrace frame used to sit here as a short band and read as an
+          empty rectangle — it is exposed for one lamp and is nearly black. It
+          now does the job that darkness is actually good for: it is the ground
+          under the Dress code header, above. */}
       <Gallery />
       <Faq />
+      <LineArt flip />
       <Contact />
     </main>
     {/* Outside <main>: it is the page's footer, not part of its main content. */}
