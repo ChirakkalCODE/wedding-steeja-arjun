@@ -1,7 +1,8 @@
 {
   "extends": "astro/tsconfigs/strict",
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"],
+  "//exclude": "supabase/functions is Deno, not Node — it uses the Deno global and jsr: specifiers, which this config has no types for. It is type-checked by `npx supabase functions deploy` (and by `deno check`), not by `astro check`.",
+  "exclude": ["dist", "supabase"],
   "compilerOptions": {
     "strictNullChecks": true,
     "allowJs": true

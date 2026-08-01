@@ -297,3 +297,95 @@ the section is `min-height: 100svh` and grows rather than clipping the names.
 - Inter Variable is 47 kB of the 90 kB of fonts, for a page that uses a single
   weight. If the font budget ever matters more than it does now, the static
   `@fontsource/inter` 400 face is about a third of that.
+
+## Supabase backend (RSVPs)
+
+### Why guests never touch the database
+
+The site is a static build on GitHub Pages. There is no server of ours in front
+of it, so the anon key is compiled into the client bundle and must be treated as
+public. A Turnstile token can only be verified by something holding the
+Turnstile *secret*, and a static page cannot hold a secret.
+
+So `anon` is granted nothing on `public.rsvps` — no select, insert, update or
+delete. The anon key is useless on its own; it exists only so the admin area can
+sign in. Every write goes through the `rsvp` edge function, which verifies
+Turnstile server-side and then inserts with the service role (which bypasses
+RLS). There is deliberately no INSERT policy for anybody.
+
+If replies ever stop arriving, the fault is in the edge function or its secrets.
+It is never "anon needs an insert policy".
+
+### Where each secret lives
+
+| Value | Lives in | Public? |
+| --- | --- | --- |
+| `PUBLIC_SUPABASE_URL` | `.env`, compiled into the bundle | yes, by design |
+| `PUBLIC_SUPABASE_ANON_KEY` | `.env`, compiled into the bundle | yes, by design |
+| `PUBLIC_TURNSTILE_SITE_KEY` | `.env`, compiled into the bundle | yes, by design |
+| `SUPABASE_SERVICE_ROLE_KEY` | Edge Function secrets **only** | **never** — injected by the platform |
+| `TURNSTILE_SECRET_KEY` | Edge Function secrets **only** | **never** |
+
+`.env` is gitignored (`.env`, `.env.*`, with `!.env.example` re-included).
+The two secrets appear in no file in this repo, and never should.
+
+### Applying migrations
+
+```bash
+npx supabase@latest login
+npx supabase@latest link --project-ref <your-project-ref>
+npx supabase@latest db push          # applies supabase/migrations/*.sql in order
+```
+
+The schema is the migration file, not the dashboard. If you change something by
+clicking, this repo is wrong and the next `db push` onto a fresh project will
+not reproduce production. Verify what actually landed with:
+
+```bash
+npx supabase@latest db diff --linked   # should print nothing
+```
+
+### Deploying the edge function
+
+```bash
+npx supabase@latest secrets set TURNSTILE_SECRET_KEY=<cloudflare-secret>
+npx supabase@latest functions deploy rsvp
+```
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected into the function by
+the platform — do not set them yourself. The deployed URL is
+`https://<project-ref>.supabase.co/functions/v1/rsvp`.
+
+CORS is an explicit allowlist, not a wildcard: `https://chirakkalcode.github.io`
+and `http://localhost:4321`. A new origin means editing `ALLOWED_ORIGINS` in
+`supabase/functions/rsvp/index.ts` and redeploying.
+
+### Rotating keys
+
+- **Turnstile secret** — roll it in the Cloudflare dashboard, then
+  `npx supabase@latest secrets set TURNSTILE_SECRET_KEY=<new>` and redeploy the
+  function. The site key is unchanged, so the front end needs no rebuild.
+- **Service role key** — Supabase dashboard → Settings → API → roll. It is
+  injected automatically, so redeploy the function and nothing else.
+- **Anon key** — rolling it invalidates the compiled bundle: update `.env`,
+  rebuild and push, because the old key is baked into the deployed HTML.
+- After any rotation, re-run the anon lockdown check in the test log below. A
+  rotated anon key must still be able to do nothing.
+
+### Auth settings (must be set in the dashboard)
+
+Both of these are project settings, not migrations, so they are recorded here:
+
+1. **Email confirmations: OFF.** The admin address is
+   `admin@steeja-arjun.invalid`, a non-routable placeholder on the reserved
+   `.invalid` TLD. It has no inbox, so a confirmation mail could never be
+   answered. Dashboard → Authentication → Providers → Email → uncheck
+   "Confirm email".
+2. **Public sign-ups: DISABLED.** There must be exactly one account, forever.
+   Dashboard → Authentication → Sign In / Providers → "Allow new users to sign
+   up" → off. With this off, the `authenticated` RLS policies (`using (true)`)
+   mean "the one account that exists" rather than "anyone who registers".
+
+The admin user is created once, by hand, and its password is generated at 32+
+characters and kept in a password manager. It is never committed and never
+printed into a terminal that is being recorded.
