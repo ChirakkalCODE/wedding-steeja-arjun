@@ -44,6 +44,9 @@ const state = {
   filter: 'all' as Filter,
   sort: 'received' as Sort,
   expanded: new Set<string>(),
+  /* Ticked rows, for the bulk delete. Keyed on id rather than index so it
+     survives a re-sort, a filter change and a row disappearing underneath it. */
+  selected: new Set<string>(),
   loading: true,
   loadFailed: false,
   /**
@@ -458,6 +461,18 @@ function renderCompanions(row: Rsvp): HTMLElement {
     el('h3', { class: 'editor__heading' }, `Coming with them (${list.length})`),
     list.length === 0 ? el('p', { class: 'editor__empty' }, 'Nobody — replying for themselves only.') : null,
     ...editors,
+    /* Missing until now: the editor could rename, retype and remove a
+       companion but not add one, so a guest who rang to say "actually my
+       mother is coming too" could not be recorded without editing the
+       database by hand. */
+    el('button', {
+      class: 'admin__button admin__button--quiet',
+      type: 'button',
+      hidden: list.length >= 20,
+      onclick: () => {
+        void patch(row.id, { companions: [...list, { name: '', type: 'adult' }] });
+      },
+    }, 'Add another person'),
   );
 }
 
@@ -518,7 +533,24 @@ function summaryCells(row: Rsvp, duplicates: Set<string>): HTMLElement[] {
     },
   }, `${row.first_name} ${row.last_name}`);
 
+  const tick = el('input', {
+    type: 'checkbox',
+    class: 'row__tick',
+    checked: state.selected.has(row.id),
+    'aria-label': `Select ${row.first_name} ${row.last_name}`,
+    onchange: (event: Event) => {
+      const on = (event.target as HTMLInputElement).checked;
+      if (on) state.selected.add(row.id);
+      else state.selected.delete(row.id);
+      /* Only the bulk bar and the header tick depend on this, so the table is
+         left alone — re-rendering would move focus off the checkbox the couple
+         just used and make ticking five rows in a row impossible by keyboard. */
+      refreshSelectionUi();
+    },
+  });
+
   return [
+    cell('Select', tick),
     cell('Name',
       toggleButton,
       isDuplicate
@@ -527,6 +559,14 @@ function summaryCells(row: Rsvp, duplicates: Set<string>): HTMLElement[] {
             title: 'Same number as another entry',
             'aria-label': 'Same number as another entry',
           }, '●')
+        : null,
+      /* Only marked when it is NOT a web reply. The default case is the
+         majority and needs no badge; what the couple want to spot is the row
+         they typed in themselves, because that is the one with no audit trail
+         behind it and the one they may need to check against a WhatsApp
+         thread. */
+      row.source && row.source !== 'web'
+        ? el('span', { class: 'row__source' }, row.source)
         : null,
     ),
     cell('Phone', el('span', { class: 'row__phone' }, row.phone)),
@@ -552,7 +592,8 @@ function renderRow(row: Rsvp, duplicates: Set<string>): HTMLElement[] {
   return [
     main,
     el('tr', { class: 'row__expansion' },
-      el('td', { colspan: 8 }, renderExpanded(row)),
+      // 9, not 8: the tick column was added in front.
+      el('td', { colspan: 9 }, renderExpanded(row)),
     ),
   ];
 }
@@ -657,6 +698,50 @@ function renderToolbar(): HTMLElement {
   );
 }
 
+/**
+ * The bulk action bar. Present only when something is ticked, so it never
+ * occupies space above a table nobody has selected anything in.
+ */
+function renderBulkBar(): HTMLElement {
+  const chosen = state.rows.filter((r) => state.selected.has(r.id));
+
+  const bar = el('div', {
+    class: 'bulk',
+    id: 'bulk-bar',
+    role: 'status',
+    hidden: chosen.length === 0,
+  },
+    el('span', { class: 'bulk__count' },
+      `${chosen.length} selected`),
+    el('button', {
+      class: 'admin__button admin__button--quiet bulk__clear',
+      type: 'button',
+      onclick: () => { state.selected.clear(); renderDashboard(); },
+    }, 'Clear'),
+    el('button', {
+      class: 'admin__button admin__button--danger',
+      type: 'button',
+      onclick: () => confirmBulkDelete(chosen),
+    }, 'Delete selected'),
+  );
+
+  return bar;
+}
+
+/** Updates the bar and the header tick without rebuilding the table. */
+function refreshSelectionUi(): void {
+  const bar = document.getElementById('bulk-bar');
+  if (bar) bar.replaceWith(renderBulkBar());
+
+  const rows = visibleRows();
+  const all = document.getElementById('select-all') as HTMLInputElement | null;
+  if (all) {
+    const allTicked = rows.length > 0 && rows.every((r) => state.selected.has(r.id));
+    all.checked = allTicked;
+    all.indeterminate = rows.some((r) => state.selected.has(r.id)) && !allTicked;
+  }
+}
+
 function renderDashboard(): void {
   const scroll = window.scrollY;
   clear(root);
@@ -674,6 +759,11 @@ function renderDashboard(): void {
         disabled: state.rows.length === 0,
         onclick: () => downloadCsv(visibleRows()),
       }, 'Download CSV'),
+      el('button', {
+        class: 'admin__button admin__button--quiet',
+        type: 'button',
+        onclick: () => openAddEntry(),
+      }, 'Add entry'),
       el('button', {
         class: 'admin__button admin__button--quiet',
         type: 'button',
@@ -713,6 +803,7 @@ function renderDashboard(): void {
   }
 
   root.append(renderToolbar());
+  root.append(renderBulkBar());
 
   const rows = visibleRows();
   const duplicates = duplicatePhones(state.rows);
@@ -724,7 +815,32 @@ function renderDashboard(): void {
     return;
   }
 
+  /* Select-all applies to what is ON SCREEN, not to every loaded row. Ticking
+     a box while a filter is active and silently selecting rows you cannot see
+     is how somebody deletes forty replies meaning to delete four. */
+  const allTicked = rows.length > 0 && rows.every((r) => state.selected.has(r.id));
+  const someTicked = rows.some((r) => state.selected.has(r.id));
+
+  const selectAll = el('input', {
+    type: 'checkbox',
+    id: 'select-all',
+    class: 'row__tick',
+    checked: allTicked,
+    'aria-label': 'Select all shown replies',
+    onchange: (event: Event) => {
+      const on = (event.target as HTMLInputElement).checked;
+      for (const r of rows) {
+        if (on) state.selected.add(r.id);
+        else state.selected.delete(r.id);
+      }
+      renderDashboard();
+    },
+  });
+  // Neither on nor off: some of the shown rows are ticked.
+  selectAll.indeterminate = someTicked && !allTicked;
+
   const head = el('tr', {},
+    el('th', { scope: 'col', class: 'table__tick-col' }, selectAll),
     ...['Name', 'Phone', 'Party', 'Mass', 'Reception', 'With them', 'Message', 'Received']
       .map((h) => el('th', { scope: 'col' }, h)),
   );
@@ -742,6 +858,81 @@ function renderDashboard(): void {
 /* -------------------------------------------------------------------------
    Delete, behind a typed confirmation
    ------------------------------------------------------------------------- */
+
+/**
+ * Bulk delete, behind the same typed confirmation as a single row.
+ *
+ * The word to type is the COUNT, not a fixed phrase: it forces the reader to
+ * look at how many rows they are about to destroy, which is the one number
+ * they can get wrong here. Deleting one reply by mistake is recoverable by
+ * asking the guest again; deleting thirty is not.
+ */
+function confirmBulkDelete(rows: Rsvp[]): void {
+  const expected = String(rows.length);
+
+  const confirm = el('button', {
+    class: 'admin__button admin__button--danger',
+    type: 'button',
+    disabled: true,
+    onclick: () => { dialog.close(); void removeMany(rows); },
+  }, `Delete ${rows.length} ${rows.length === 1 ? 'reply' : 'replies'}`);
+
+  const input = el('input', {
+    class: 'admin__input', id: 'confirm-count', autocomplete: 'off',
+    inputmode: 'numeric',
+    oninput: (event: Event) => {
+      confirm.disabled = (event.target as HTMLInputElement).value.trim() !== expected;
+    },
+  });
+
+  const dialog = el('dialog', { class: 'confirm' },
+    el('h2', { class: 'confirm__title' },
+      `Delete ${rows.length} ${rows.length === 1 ? 'reply' : 'replies'}?`),
+    el('p', { class: 'confirm__body' },
+      'This cannot be undone. There is no other copy of these replies.'),
+    el('ul', { class: 'confirm__list' },
+      ...rows.slice(0, 8).map((r) =>
+        el('li', {}, `${r.first_name} ${r.last_name} — ${r.party_size} ${r.party_size === 1 ? 'person' : 'people'}`)),
+      rows.length > 8 ? el('li', { class: 'confirm__more' }, `…and ${rows.length - 8} more`) : null,
+    ),
+    el('label', { class: 'editor__field', for: 'confirm-count' },
+      el('span', { class: 'editor__label' }, `Type ${expected} to confirm`),
+      input,
+    ),
+    el('div', { class: 'confirm__actions' },
+      el('button', {
+        class: 'admin__button admin__button--quiet', type: 'button',
+        onclick: () => dialog.close(),
+      }, 'Keep them'),
+      confirm,
+    ),
+  );
+
+  dialog.addEventListener('close', () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+  input.focus();
+}
+
+async function removeMany(rows: Rsvp[]): Promise<void> {
+  const ids = rows.map((r) => r.id);
+  const before = state.rows.slice();
+
+  state.rows = state.rows.filter((r) => !ids.includes(r.id));
+  state.selected.clear();
+  renderDashboard();
+
+  const { error } = await supabase.from('rsvps').delete().in('id', ids);
+
+  if (error) {
+    if (isAuthFailure(error)) return handleExpiredSession();
+    state.rows = before;
+    renderDashboard();
+    toast(`Could not delete those entries. ${error.message}`, 'error');
+    return;
+  }
+  toast(`Deleted ${ids.length} ${ids.length === 1 ? 'reply' : 'replies'}.`);
+}
 
 function confirmDelete(row: Rsvp): void {
   const expected = `${row.first_name} ${row.last_name}`.trim().toLowerCase();
@@ -788,6 +979,160 @@ function confirmDelete(row: Rsvp): void {
   document.body.append(dialog);
   dialog.showModal();
   input.focus();
+}
+
+/* -------------------------------------------------------------------------
+   Add an entry by hand
+   -------------------------------------------------------------------------
+   Most replies will not arrive through the form. They will arrive as a phone
+   call to a brother, or a WhatsApp message, or somebody saying it at church —
+   and if there is no way to record those, the guest list is wrong and the
+   couple keep a second one on paper.
+
+   Written with `source: 'manual'` so a row they typed is always distinguishable
+   from one a guest submitted, which matters when a number looks wrong later.
+   ------------------------------------------------------------------------- */
+function openAddEntry(): void {
+  const field = (label: string, id: string, attrs: Record<string, unknown> = {}) => {
+    const input = el('input', { class: 'admin__input', id, ...attrs });
+    return { input, node: el('label', { class: 'editor__field', for: id },
+      el('span', { class: 'editor__label' }, label), input) };
+  };
+
+  const first = field('First name', 'add-first', { autocomplete: 'off' });
+  const last = field('Last name', 'add-last', { autocomplete: 'off' });
+  const phone = field('Phone (optional)', 'add-phone', { type: 'tel', autocomplete: 'off' });
+
+  let mass = false;
+  let reception = false;
+  let companions: { name: string; type: 'adult' | 'child' }[] = [];
+
+  const error = el('p', { class: 'admin__error', role: 'alert' }, '');
+  const people = el('div', {});
+
+  /* Rebuilt in place rather than by re-opening the dialog, so focus and
+     everything already typed survive adding a companion. */
+  function drawPeople() {
+    clear(people);
+    companions.forEach((c, i) => {
+      people.append(el('div', { class: 'companion' },
+        el('label', { class: 'editor__field' },
+          el('span', { class: 'editor__label' }, `Person ${i + 1}`),
+          el('input', {
+            class: 'admin__input', value: c.name, autocomplete: 'off',
+            oninput: (e: Event) => { companions[i].name = (e.target as HTMLInputElement).value; },
+          }),
+        ),
+        el('label', { class: 'editor__field' },
+          el('span', { class: 'editor__label' }, 'Age'),
+          el('select', {
+            class: 'admin__input',
+            onchange: (e: Event) => {
+              companions[i].type = (e.target as HTMLSelectElement).value as 'adult' | 'child';
+            },
+          },
+            el('option', { value: 'adult', selected: c.type === 'adult' }, 'Adult'),
+            el('option', { value: 'child', selected: c.type === 'child' }, 'Child (under 12)'),
+          ),
+        ),
+        el('button', {
+          class: 'admin__button admin__button--quiet', type: 'button',
+          onclick: () => { companions = companions.filter((_, j) => j !== i); drawPeople(); },
+        }, 'Remove'),
+      ));
+    });
+  }
+  drawPeople();
+
+  const save = el('button', { class: 'admin__button', type: 'submit' }, 'Add entry');
+
+  const form = el('form', {
+    class: 'add-form',
+    novalidate: true,
+    onsubmit: async (event: Event) => {
+      event.preventDefault();
+      if (save.disabled) return;
+
+      const f = first.input.value.trim();
+      const l = last.input.value.trim();
+      const p = phone.input.value.trim();
+
+      if (!f || !l) { error.textContent = 'Please give a first and last name.'; return; }
+      /* Same rule as the public form and the database: blank is fine, wrong is
+         not. Typed by hand here, so it is likelier to be wrong. */
+      if (p && !/^\+[1-9][0-9]{7,14}$/.test(p.replace(/[\s()\-.]/g, ''))) {
+        error.textContent = 'That phone number is not in international form, e.g. +919847012345.';
+        return;
+      }
+      if (!mass && !reception && companions.length > 0) {
+        error.textContent = 'Someone who is not coming cannot bring anyone.';
+        return;
+      }
+      if (companions.some((c) => !c.name.trim())) {
+        error.textContent = 'Please give everyone a name, or remove the empty row.';
+        return;
+      }
+
+      save.disabled = true;
+      save.textContent = 'Adding…';
+      error.textContent = '';
+
+      const { data, error: err } = await supabase.from('rsvps').insert({
+        first_name: f,
+        last_name: l,
+        phone: p ? p.replace(/[\s()\-.]/g, '') : null,
+        attending_mass: mass,
+        attending_reception: reception,
+        companions,
+        source: 'manual',
+      }).select().single();
+
+      if (err) {
+        if (isAuthFailure(err)) { dialog.close(); await handleExpiredSession(); return; }
+        error.textContent = `Could not add that entry. ${err.message}`;
+        save.disabled = false;
+        save.textContent = 'Add entry';
+        return;
+      }
+
+      state.rows.unshift(data as Rsvp);
+      dialog.close();
+      renderDashboard();
+      toast(`Added ${f} ${l}.`);
+    },
+  },
+    el('h2', { class: 'confirm__title' }, 'Add an entry'),
+    el('p', { class: 'confirm__body' },
+      'For a reply that came by phone, WhatsApp or in person. It will be marked “manual”.'),
+    el('div', { class: 'editor__grid' }, first.node, last.node, phone.node),
+    el('div', { class: 'editor__toggles' },
+      toggle('Wedding Mass', false, (v) => { mass = v; }),
+      toggle('Reception', false, (v) => { reception = v; }),
+    ),
+    el('div', { class: 'editor__block' },
+      el('h3', { class: 'editor__heading' }, 'Coming with them'),
+      people,
+      el('button', {
+        class: 'admin__button admin__button--quiet', type: 'button',
+        onclick: () => { companions = [...companions, { name: '', type: 'adult' }]; drawPeople(); },
+      }, 'Add another person'),
+    ),
+    error,
+    el('div', { class: 'confirm__actions' },
+      el('button', {
+        class: 'admin__button admin__button--quiet', type: 'button',
+        onclick: () => dialog.close(),
+      }, 'Cancel'),
+      save,
+    ),
+  );
+
+  // <dialog> brings focus trapping and Escape from the platform.
+  const dialog = el('dialog', { class: 'confirm confirm--wide' }, form);
+  dialog.addEventListener('close', () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+  first.input.focus();
 }
 
 /* -------------------------------------------------------------------------
