@@ -46,6 +46,20 @@ const state = {
   expanded: new Set<string>(),
   loading: true,
   loadFailed: false,
+  /**
+   * Whether this session is on the allowlist. `null` until asked.
+   *
+   * Needed because RLS *filters* rather than raises: a signed-in account that
+   * is not on the list gets an empty result set, which is byte for byte what a
+   * guest list with no replies yet looks like. Without this the couple would
+   * read "No entries yet" and reasonably conclude the replies had been lost.
+   * See supabase/migrations/0004_is_admin_probe.sql.
+   */
+  isAdmin: null as boolean | null,
+  /* Shown back to the reader in the not-allowlisted screen, so they can tell at
+     a glance whether they are signed in as the account they meant to be. */
+  userId: undefined as string | undefined,
+  email: undefined as string | undefined,
 };
 
 let root: HTMLElement;
@@ -152,6 +166,17 @@ async function loadRows(): Promise<void> {
   state.loading = true;
   state.loadFailed = false;
   renderDashboard();
+
+  /* Asked alongside the rows, not instead of them. A `false` here is the only
+     thing that can tell an empty table apart from a revoked account — and the
+     account being revoked is the likelier of the two, because deleting and
+     recreating the admin user cascades the allowlist row away without a word. */
+  const probe = await supabase.rpc('is_admin');
+  if (probe.error && isAuthFailure(probe.error)) return handleExpiredSession();
+  /* A missing function (an older database) is not a reason to block the view:
+     fall back to the ambiguous-but-harmless "assume allowed" and let the empty
+     state carry its softer hint. */
+  state.isAdmin = probe.error ? null : Boolean(probe.data);
 
   const { data, error } = await supabase
     .from('rsvps')
@@ -532,18 +557,44 @@ function renderRow(row: Rsvp, duplicates: Set<string>): HTMLElement[] {
   ];
 }
 
+/**
+ * Signed in, and the database says this account is not on the allowlist.
+ *
+ * A distinct screen rather than a footnote on the empty state, because the two
+ * mean opposite things: one says "nobody has replied yet", the other says "you
+ * cannot see the replies". Rendering the first when the second is true is how
+ * somebody concludes the guest list has been lost.
+ *
+ * It names the actual cause, because the cause is not obvious and has bitten
+ * this project three times: `private.admins.user_id` cascades on delete, so
+ * deleting and recreating the admin account revokes access silently.
+ */
+function renderNotAllowlisted(email: string | undefined): HTMLElement {
+  return el('div', { class: 'admin__empty admin__empty--denied' },
+    el('p', { class: 'admin__empty-title' }, 'This account cannot see the guest list'),
+    el('p', { class: 'admin__empty-body' },
+      `You are signed in${email ? ` as ${email}` : ''}, but this account is not on ` +
+      'the admin allowlist, so the database returns nothing. No replies have been ' +
+      'lost — they are simply not visible to this account.'),
+    el('p', { class: 'admin__empty-note' },
+      'The usual cause is the admin account having been deleted and recreated: ' +
+      'the allowlist entry is removed with it. Re-add this account from the ' +
+      'Supabase SQL editor:'),
+    el('pre', { class: 'admin__code' },
+      "insert into private.admins (user_id, note)\nvalues ('" +
+      (state.userId ?? '<your user id>') +
+      "', 'admin');"),
+  );
+}
+
 function renderEmpty(): HTMLElement {
   return el('div', { class: 'admin__empty' },
     el('p', { class: 'admin__empty-title' }, 'No entries yet'),
     el('p', { class: 'admin__empty-body' },
       'Replies will appear here as guests send them.'),
-    /* The second reason this view is empty, stated rather than left to be
-       discovered. RLS filters rows instead of raising, so an account that is
-       not on the allowlist sees exactly this screen — and silently believing
-       the guest list is empty is the worse of the two failures. */
-    el('p', { class: 'admin__empty-note' },
-      'If you were expecting replies here, this account may not be on the admin ' +
-      'allowlist. Add its user id to private.admins from the SQL editor.'),
+    /* Only reached when the allowlist probe says this account IS allowed, so
+       this really is an empty guest list — the ambiguity that used to live in
+       this message is now handled by renderNotAllowlisted above. */
   );
 }
 
@@ -643,6 +694,14 @@ function renderDashboard(): void {
       el('p', {}, 'Could not load the replies.'),
       el('button', { class: 'admin__button', type: 'button', onclick: () => void loadRows() }, 'Try again'),
     ));
+    return;
+  }
+
+  /* Checked before the counters: six zeroes above a "you have no access"
+     message reads as a guest list that has been emptied, which is the exact
+     misreading this screen exists to prevent. */
+  if (state.isAdmin === false) {
+    root.append(renderNotAllowlisted(state.email));
     return;
   }
 
@@ -750,6 +809,8 @@ export async function start(mount: HTMLElement): Promise<void> {
   supabase.auth.onAuthStateChange((event, session) => {
     if (session) {
       hadSession = true;
+      state.userId = session.user?.id;
+      state.email = session.user?.email;
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') void loadRows();
       return;
     }
