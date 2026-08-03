@@ -322,12 +322,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
      Action: submit
   ----------------------------------------------------------------------- */
 
-  // 1. Honeypot. A field no human ever sees, so anything in it is a bot.
-  //    Answer 200 with a plausible id: a bot that gets a 400 learns it was
-  //    caught and tries something else, a bot that gets a success does not.
-  const honeypot = clean(body.company ?? body.website ?? '');
-  if (honeypot.length > 0) {
-    return json({ ok: true, id: crypto.randomUUID() }, 200, origin);
+  /* 1. Honeypot — flagged, never discarded.
+   *
+   * This used to return a fake success and write nothing, and it ate a real
+   * reply: the field was called `website` with a visible "Website" label, which
+   * browsers autofill from a saved profile regardless of autocomplete="off".
+   * The guest saw "Thank you" and the couple never learned they had replied.
+   *
+   * Silently dropping a submission is only correct if the detector is perfect,
+   * and this one demonstrably is not. So a hit now sets a flag that the row
+   * carries into the admin area for review; the response is byte-identical to
+   * an ordinary success, so a bot still learns nothing.
+   *
+   * `hp_ref` is the current name. `website` and `company` stay recognised
+   * because an old page may still be open in somebody's tab.
+   */
+  const honeypot = clean(body.hp_ref ?? body.company ?? body.website ?? '');
+  const flaggedSpam = honeypot.length > 0;
+  if (flaggedSpam) {
+    /* Logged deliberately, and with the length only — never the value, which
+       is whatever the browser autofilled and may be somebody's home address.
+       If real guests are being caught, this is where it shows up. */
+    console.warn(`rsvp: honeypot matched, flagging (len=${honeypot.length})`);
   }
 
   // 2. Per-caller limit, before Turnstile: it is the cheaper of the two checks
@@ -419,6 +435,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         companions,
         message: message.length ? message : null,
         source: 'web',
+        flagged_spam: flaggedSpam,
       })
       .select('id')
       .single();

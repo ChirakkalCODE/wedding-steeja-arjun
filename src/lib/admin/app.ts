@@ -35,7 +35,7 @@ import { computeStats, duplicatePhones } from './stats';
 import { downloadCsv } from './csv';
 import { clear, el, toast } from './dom';
 
-type Filter = 'all' | 'coming' | 'not-coming' | 'has-message';
+type Filter = 'all' | 'coming' | 'not-coming' | 'has-message' | 'flagged';
 type Sort = 'received' | 'party';
 
 const state = {
@@ -317,6 +317,7 @@ function visibleRows(): Rsvp[] {
     if (state.filter === 'coming' && !(r.attending_mass || r.attending_reception)) return false;
     if (state.filter === 'not-coming' && (r.attending_mass || r.attending_reception)) return false;
     if (state.filter === 'has-message' && !r.message?.trim()) return false;
+    if (state.filter === 'flagged' && !r.flagged_spam) return false;
 
     if (!q) return true;
     return (
@@ -363,6 +364,11 @@ function renderStats(): HTMLElement {
     statCard(s.totalPeople, 'Total people expected', 'at one or both'),
     statCard(s.children, 'Children', 'under 12'),
     statCard(s.todayEntries, 'Received today', 'replies'),
+    /* Only when there is something to review. A permanent zero teaches the
+       couple to stop seeing this tile, which is the one that matters. */
+    s.flaggedEntries > 0
+      ? statCard(s.flaggedEntries, 'Needs review', 'not counted above')
+      : null,
   );
 }
 
@@ -500,6 +506,23 @@ function renderExpanded(row: Rsvp): HTMLElement {
         (v) => void patchInRow(row.id, { admin_note: v.trim() || null }), { textarea: true }),
     ),
 
+    /* One click, no confirmation. Clearing a false positive is the safe
+       direction — it only ever adds a reply back into the counts — and putting
+       a dialog in front of it would make the couple hesitate over the action we
+       most want them to take. */
+    row.flagged_spam
+      ? el('div', { class: 'editor__block editor__flagged' },
+          el('p', { class: 'editor__flagged-text' },
+            'The spam check caught this reply, so it is not counted yet. ' +
+            'That check has been wrong before — if this looks like a real guest, clear it.'),
+          el('button', {
+            class: 'admin__button',
+            type: 'button',
+            onclick: () => void patchInRow(row.id, { flagged_spam: false }),
+          }, 'Not spam — count this reply'),
+        )
+      : null,
+
     el('div', { class: 'editor__danger' },
       el('button', {
         class: 'admin__button admin__button--danger',
@@ -567,6 +590,15 @@ function summaryCells(row: Rsvp, duplicates: Set<string>): HTMLElement[] {
          thread. */
       row.source && row.source !== 'web'
         ? el('span', { class: 'row__source' }, row.source)
+        : null,
+      /* Amber, and it says what to do rather than what happened. "Spam" would
+         be the software asserting something it got wrong at least once; "needs
+         review" is the truth — a human has not looked yet. */
+      row.flagged_spam
+        ? el('span', {
+            class: 'row__flag',
+            title: 'The spam check caught this. It is not counted until you clear it.',
+          }, 'Needs review')
         : null,
     ),
     cell('Phone', el('span', { class: 'row__phone' }, row.phone)),
@@ -694,6 +726,7 @@ function renderToolbar(): HTMLElement {
       chip('coming', 'Coming'),
       chip('not-coming', 'Not coming'),
       chip('has-message', 'Has message'),
+      chip('flagged', 'Flagged'),
     ),
   );
 }

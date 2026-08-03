@@ -333,13 +333,30 @@ const primary = CONTACTS[0];
           a filled honeypot with a plausible success — a bot that gets a 400
           learns it was caught. */}
       <div class="rsvp__honeypot" aria-hidden="true">
-        <label for="rsvp-website">Website</label>
+        {/* No visible label text, and no longer called `website`.
+            ------------------------------------------------------------------
+            The previous version had `name="website"` and a <label>Website</label>,
+            and Chrome autofilled it from a saved profile — which flagged a real
+            guest's reply as spam. Browsers match on the name, the id, the label
+            text and the surrounding words, so all four are now meaningless.
+
+            `autocomplete="new-password"` rather than "off": browsers ignore
+            "off" for non-credential fields as an anti-dark-pattern measure, but
+            they will not autofill a field claiming to be a new password.
+            data-1p-ignore and data-lpignore ask 1Password and LastPass to stay
+            out of it too.
+
+            Still positioned off-screen rather than display:none — a hidden
+            field is the first thing a form-filling bot skips. */}
         <input
-          id="rsvp-website"
-          name="website"
+          id="rsvp-hp-ref"
+          name="hp_ref"
           type="text"
           tabindex="-1"
-          autocomplete="off"
+          autocomplete="new-password"
+          data-1p-ignore
+          data-lpignore="true"
+          data-form-type="other"
         />
       </div>
 
@@ -433,7 +450,7 @@ const primary = CONTACTS[0];
     const dial = $<HTMLSelectElement>('rsvp-dial');
     const phone = $<HTMLInputElement>('rsvp-phone');
       const message = $<HTMLTextAreaElement>('rsvp-message');
-    const honeypot = $<HTMLInputElement>('rsvp-website');
+    const honeypot = $<HTMLInputElement>('rsvp-hp-ref');
     const people = $<HTMLDivElement>('rsvp-people');
     const empty = $<HTMLParagraphElement>('rsvp-companions-empty');
     const addButton = $<HTMLButtonElement>('rsvp-add');
@@ -900,7 +917,7 @@ const primary = CONTACTS[0];
         attending_reception: answer('attending_reception'),
         companions: companionsField.hidden ? [] : companions(),
         message: trim(message.value) || null,
-        website: honeypot.value,
+        hp_ref: honeypot.value,
         turnstile_token: token,
       };
 

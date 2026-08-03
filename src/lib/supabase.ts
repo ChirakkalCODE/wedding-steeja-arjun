@@ -48,6 +48,8 @@ export type Rsvp = {
   created_at: string;
   updated_at: string;
   admin_note: string | null;
+  /** Set when the honeypot matched. The row is kept for review, never dropped. */
+  flagged_spam: boolean;
   source: string;
   /** Generated: 1 + companions.length. */
   party_size: number;
