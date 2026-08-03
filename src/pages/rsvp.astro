@@ -1,0 +1,68 @@
+---
+/**
+ * /rsvp — the reply form, on its own page.
+ *
+ * Off the one-pager because this is the link that gets sent to a guest
+ * directly ("here's the form"), and a URL that lands them 8,000 pixels down a
+ * scrolling invitation is a worse answer than one that opens on the question.
+ *
+ * Indexable and shareable, unlike /admin: it carries no noindex, it is in the
+ * sitemap, and it shares the home page's Open Graph card so a forwarded link
+ * still previews as the invitation rather than as a bare URL.
+ *
+ * No hero. The photograph is the invitation's opening; this page is a form and
+ * should start with the question.
+ */
+import Base from '../layouts/Base.astro';
+import Footer from '../components/Footer.astro';
+import Rsvp from '../components/Rsvp.astro';
+import TopBar from '../components/TopBar.astro';
+import { withBase } from '../lib/paths';
+import '../styles/global.css';
+
+const title = 'Let us know you’re coming — Steeja & Arjun';
+const description =
+  'Reply to Steeja and Arjun’s wedding on Sunday, 6 September 2026 in Kerala. Please let us know by 20 August 2026.';
+---
+
+<Base title={title} description={description} path="rsvp">
+  <TopBar />
+
+  <main class="rsvp-page" id="main" tabindex="-1">
+    {/* Above the heading, not below the form: someone who opened this from a
+        message has never seen the rest of the site and this is the only thing
+        telling them there is a rest of the site. */}
+    <a class="rsvp-page__back" href={withBase('')}>&larr; Back to the wedding page</a>
+
+    <Rsvp />
+  </main>
+
+  <Footer />
+</Base>
+
+<style>
+  .rsvp-page {
+    /* Clears the floating capsule, which is fixed and out of flow. On this page
+       the bar is present from the first frame — there is no hero for it to hide
+       over — so the space has to be reserved here. */
+    padding-top: calc(var(--bar-h) + clamp(1rem, 4vw, 2.5rem));
+  }
+
+  .rsvp-page__back {
+    display: inline-block;
+    max-width: 42rem;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 6vw, 3rem);
+    width: 100%;
+    color: var(--color-muted);
+    font-size: 0.95rem;
+    text-decoration: underline;
+    text-decoration-color: rgb(var(--ink-rgb) / 0.25);
+    text-underline-offset: 4px;
+  }
+
+  .rsvp-page__back:hover,
+  .rsvp-page__back:focus-visible {
+    color: var(--color-ink);
+  }
+</style>

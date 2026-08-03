@@ -6,6 +6,7 @@ import {
   WIDE_MEDIA,
   WIDE_SIZES,
 } from '../lib/hero-media';
+import { withBase } from '../lib/paths';
 
 const media = await heroMedia();
 
@@ -93,7 +94,13 @@ const alt =
         one, and this is the button that should reach it. The brothers are
         still one section further down, which is where a guest with no
         JavaScript is sent from inside the form itself. */}
-    <a class="hero__cta rise rise--3" href="#rsvp">Let us know you&rsquo;re coming</a>
+    {/* A route, not an anchor. The form moved to its own page in 13b, and this
+        button is the one most likely to be pressed before the page has been
+        read — sending it 8,000 pixels down to a callout, only for the guest to
+        press a second button, is one hop too many. */}
+    <a class="hero__cta rise rise--3" href={withBase('rsvp')}>
+      Let us know you&rsquo;re coming
+    </a>
   </div>
 
   <p class="hero__scroll rise rise--3" aria-hidden="true">Scroll</p>

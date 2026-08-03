@@ -1,0 +1,117 @@
+---
+/**
+ * What stands where the form used to, on the one-pager.
+ *
+ * Keeps `id="rsvp"` so every anchor already in the wild — the hero button, the
+ * top bar, the mobile menu, and any link a guest has already been sent — still
+ * lands somewhere sensible rather than on nothing. The form itself now lives at
+ * /rsvp; this is the invitation to go there.
+ *
+ * Deliberately short. A guest who has read to this point has the times, the
+ * venues and the dress code; what is left is one question and one button.
+ */
+import { withBase } from '../lib/paths';
+---
+
+<section class="callout" id="rsvp" aria-labelledby="callout-title">
+  <div class="callout__inner">
+    <p class="callout__eyebrow" data-anim="head">One last thing</p>
+    <h2 class="callout__title" id="callout-title" data-anim="head2">
+      Will you be joining us?
+    </h2>
+
+    <p class="callout__deadline">
+      Please let us know by <strong>20 August 2026</strong> &mdash; even if you&rsquo;ve
+      already told us in person. It helps us plan seating and food.
+    </p>
+
+    <a class="callout__cta" href={withBase('rsvp')}>
+      Let us know you&rsquo;re coming
+    </a>
+  </div>
+</section>
+
+<style>
+  .callout {
+    background-color: var(--color-shell);
+  }
+
+  .callout__inner {
+    max-width: 42rem;
+    margin-inline: auto;
+    padding: clamp(3.5rem, 8vw, 6.5rem) clamp(1.25rem, 6vw, 3rem);
+    text-align: center;
+  }
+
+  .callout__eyebrow {
+    font-size: 0.7rem;
+    line-height: 1.6;
+    letter-spacing: 0.28em;
+    text-indent: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .callout__title {
+    margin-top: clamp(0.75rem, 1.6vw, 1.1rem);
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.25rem, 5.5vw, 3.5rem);
+    line-height: 1.05;
+    color: var(--color-ink);
+  }
+
+  .callout__deadline {
+    max-width: 46ch;
+    margin: clamp(0.9rem, 2vw, 1.25rem) auto 0;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+
+  .callout__deadline strong {
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+
+  /* The one control on this section, and sized like it: comfortably past the
+     52px the rest of the site holds to, because on a phone this is the button
+     the whole page has been leading to. */
+  .callout__cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;
+    margin-top: clamp(1.75rem, 4vw, 2.5rem);
+    padding: 0.75rem 2.25rem;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+    font-size: 1.0625rem;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .callout__cta:hover,
+  .callout__cta:focus-visible {
+    background-color: transparent;
+    color: var(--color-ink);
+  }
+
+  @media (max-width: 559.98px) {
+    .callout__cta {
+      display: flex;
+      width: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .callout__cta {
+      transition: none;
+    }
+  }
+</style>

@@ -94,6 +94,8 @@
  *     inside that listener, because scrolling while the body is still pinned is
  *     what iOS Safari fights.
  */
+import { withBase } from '../lib/paths';
+
 const NAV = [
   { label: 'Story', href: '#story' },
   { label: 'Schedule', href: '#schedule' },
@@ -107,7 +109,10 @@ const CTA = 'Let us know';
    mobile menu's last item. They pointed at `#contact` while there was no reply
    form; they point at the form now, and having drifted apart once already they
    are no longer allowed to be edited one at a time. */
-const CTA_HREF = '#rsvp';
+/* A real route now, not an in-page anchor: the form moved to its own page in
+   13b. Still one constant for the capsule's pill and the mobile menu's last
+   item, which drifted apart once already. */
+const CTA_HREF = withBase('rsvp');
 ---
 
 {/* Runs before the header is parsed, so neither the burger nor the monogram is
@@ -128,7 +133,18 @@ const CTA_HREF = '#rsvp';
     Contentful Paint candidate, so the hero photograph can never be this page's
     LCP, and every other text element above the fold starts at opacity 0 under
     the entrance animation. This one does not, in either state. */}
-<p class="mono" id="mono">S <em>&amp;</em> A</p>
+{/* The way in to the admin area, and deliberately not a control.
+
+    It stays a <p>: no role, no tabindex, no aria-label, nothing that would put
+    it in the accessibility tree as interactive. A screen reader announces the
+    text "S & A" and nothing else — a guest is never told there is a door here,
+    because for a guest there isn't one.
+
+    Three clicks opens /admin. Clicks one and two are silent by design: a guest
+    who double-taps the mark must see no hint that anything is counting.
+    `data-admin-gate` is what the script hooks; the couple's keyboard route is
+    documented in the script below. */}
+<p class="mono" id="mono" data-admin-gate>S <em>&amp;</em> A</p>
 
 {/* `topbar--hero` is server-rendered, and the hidden state it names is gated on
     `.nav-js` in the CSS. That pairing is what keeps the capsule off the hero
@@ -244,6 +260,58 @@ t.setAttribute('aria-expanded','false');t.focus();
 if(!go)return;var d=document.querySelector(go);go=null;if(d)d.scrollIntoView()});
 }
 document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
+})();
+</script>
+
+{/* The admin door.
+    ---------------------------------------------------------------------------
+    Three clicks on the monogram opens /admin. Separate from the script above
+    because it shares none of its state and because this one has to survive
+    that one failing.
+
+    Why the element is left alone: adding `role="button"`, `tabindex` or an
+    aria-label would announce a way in to every screen-reader user on a wedding
+    invitation. The mark stays a <p>. The couple's keyboard route is three
+    Enters while it is focused, which requires focusing it first — reachable
+    with a screen reader's virtual cursor or by clicking it, and never offered
+    by Tab.
+
+    `document` rather than the element, and matched with closest(), so it works
+    for whichever monogram is on screen: the one inside the hero and the one
+    that has travelled into the capsule are the SAME node (see the note at the
+    top of this file), but this stays correct if that ever changes.
+
+    Silence on clicks one and two is the requirement, so there is deliberately
+    no class toggle, no cursor change and no console output anywhere below. */}
+<script is:inline>
+(function(){
+  var COUNT = 3, RESET_MS = 1200;
+  var hits = 0, timer;
+
+  function bump(){
+    hits += 1;
+    clearTimeout(timer);
+    if (hits >= COUNT) {
+      hits = 0;
+      // Astro's base path is baked in at build; this file cannot import, so the
+      // prefix is read from the document instead of hard-coded a second time.
+      var base = document.querySelector('link[rel="manifest"]');
+      base = base ? base.getAttribute('href').replace(/site\.webmanifest$/, '') : '/';
+      location.href = base + 'admin';
+      return;
+    }
+    timer = setTimeout(function(){ hits = 0; }, RESET_MS);
+  }
+
+  document.addEventListener('click', function(e){
+    if (e.target && e.target.closest && e.target.closest('[data-admin-gate]')) bump();
+  });
+
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Enter') return;
+    var el = document.activeElement;
+    if (el && el.closest && el.closest('[data-admin-gate]')) bump();
+  });
 })();
 </script>
 

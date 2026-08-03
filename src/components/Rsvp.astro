@@ -150,7 +150,12 @@ const primary = CONTACTS[0];
           without inventing an ARIA pattern; each control then carries its own
           short <label>, hidden from sight but not from a screen reader. */}
       <fieldset class="rsvp__field rsvp__fieldset">
-        <legend class="rsvp__label">Phone number</legend>
+        <legend class="rsvp__label">
+          Phone number <span class="rsvp__optional">(optional)</span>
+        </legend>
+        <p class="rsvp__hint" id="rsvp-phone-why">
+          We&rsquo;ll only use this if we need to ask you something about your reply.
+        </p>
         <div class="rsvp__phone">
           <label class="rsvp__sr" for="rsvp-dial">Country code</label>
           <select
@@ -198,27 +203,22 @@ const primary = CONTACTS[0];
           Just the number, without the country code.
         </p>
         <p class="rsvp__error" id="rsvp-phone-error" role="alert"></p>
+        {/* A note, not an error, and amber rather than brick: two people in one
+            household share a phone all the time, and this is the single most
+            likely case on a wedding guest list. It never blocks the send.
+            `role="status"` rather than `alert` for the same reason — it is
+            announced politely, after whatever the guest is doing. */}
+        <p class="rsvp__notice" id="rsvp-phone-notice" role="status"></p>
       </fieldset>
 
-      <!-- 3. Email -------------------------------------------------------- -->
-      <div class="rsvp__field">
-        <label class="rsvp__label" for="rsvp-email">
-          Email <span class="rsvp__optional">(optional)</span>
-        </label>
-        <input
-          class="rsvp__input"
-          id="rsvp-email"
-          name="email"
-          type="email"
-          inputmode="email"
-          autocomplete="email"
-          maxlength="120"
-          aria-describedby="rsvp-email-error"
-        />
-        <p class="rsvp__error" id="rsvp-email-error" role="alert"></p>
-      </div>
+      {/* There was an email field here. It is gone: nobody was going to write
+          to these addresses, and asking for one is asking a guest to hand over
+          a contact detail for no purpose they can see. The DATABASE COLUMN
+          stays — nullable and unwritten — because dropping it would need a
+          migration and would destroy the addresses already collected. See the
+          note beside the insert in supabase/functions/rsvp/index.ts. */}
 
-      <!-- 4. The two questions -------------------------------------------- -->
+      <!-- 3. The two questions -------------------------------------------- -->
       {/* Radios, not checkboxes, and that is the whole point of asking twice.
           An unticked checkbox cannot be told apart from "no" — it is both "I am
           not coming" and "I did not read this". Two radios have three states:
@@ -346,6 +346,21 @@ const primary = CONTACTS[0];
       <!-- 8. Turnstile ---------------------------------------------------- -->
       <div class="rsvp__turnstile" id="rsvp-turnstile"></div>
 
+      {/* A SECOND, separate widget, solely for the duplicate check.
+          --------------------------------------------------------------------
+          Turnstile tokens are single-use: Cloudflare will not verify the same
+          one twice. If the duplicate check spent the widget above, the token
+          the guest needs to actually send their reply would be gone, and
+          pressing Send straight after leaving the phone field would report
+          "that check didn't go through" — a failure this form has already been
+          fixed for once.
+
+          So the check gets its own widget in execute mode: invisible, solved on
+          demand, and entirely unable to touch the submit token. If it never
+          solves, the check silently does not happen and the form is unaffected.
+      */}
+      <div class="rsvp__turnstile-check" id="rsvp-turnstile-check" aria-hidden="true"></div>
+
       <p class="rsvp__error rsvp__error--form" id="rsvp-form-error" role="alert"></p>
 
       <button class="rsvp__submit" id="rsvp-submit" type="submit">
@@ -417,8 +432,7 @@ const primary = CONTACTS[0];
     const last = $<HTMLInputElement>('rsvp-last');
     const dial = $<HTMLSelectElement>('rsvp-dial');
     const phone = $<HTMLInputElement>('rsvp-phone');
-    const email = $<HTMLInputElement>('rsvp-email');
-    const message = $<HTMLTextAreaElement>('rsvp-message');
+      const message = $<HTMLTextAreaElement>('rsvp-message');
     const honeypot = $<HTMLInputElement>('rsvp-website');
     const people = $<HTMLDivElement>('rsvp-people');
     const empty = $<HTMLParagraphElement>('rsvp-companions-empty');
@@ -432,6 +446,13 @@ const primary = CONTACTS[0];
 
     let sent = false;
     let widgetId: string | undefined;
+    let checkWidgetId: string | undefined;
+    /* Resolver for the in-flight duplicate check's token, set while the
+       execute-mode widget is solving. Only ever one at a time. */
+    let pendingCheck: ((token: string) => void) | null = null;
+    /* The last number actually checked, so leaving and re-entering the field
+       without editing it does not spend another allowance. */
+    let checkedNumber = '';
 
     /* ---------------------------------------------------------------------
        Errors
@@ -475,18 +496,19 @@ const primary = CONTACTS[0];
       return `+${code}${local}`;
     }
 
+    /**
+     * Optional, so an empty field is a complete answer and validates.
+     *
+     * A field left blank and a field filled in wrongly must not collapse into
+     * the same outcome: the first is a guest declining to give a number, the
+     * second is a typo that would otherwise be stored as no number at all.
+     */
     function checkPhone() {
-      if (!phone.value.replace(/\D/g, '')) return 'Please enter your phone number.';
+      if (!phone.value.replace(/\D/g, '')) return '';
       if (!/^\+[1-9][0-9]{7,14}$/.test(e164())) {
         return 'That doesn’t look like a complete phone number.';
       }
       return '';
-    }
-
-    function checkEmail() {
-      const v = trim(email.value);
-      if (!v) return ''; // optional
-      return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? '' : 'Please check this email address.';
     }
 
     const answer = (name: string) => {
@@ -620,7 +642,71 @@ const primary = CONTACTS[0];
     onBlur(first, () => checkName(first, 'first name'), 'rsvp-first-error');
     onBlur(last, () => checkName(last, 'last name'), 'rsvp-last-error');
     onBlur(phone, checkPhone, 'rsvp-phone-error');
-    onBlur(email, checkEmail, 'rsvp-email-error');
+
+    /* ---------------------------------------------------------------------
+       Duplicate check, on blur. Advisory only — it can fail in any way at all
+       and the form is unaffected.
+       --------------------------------------------------------------------- */
+    const notice = $<HTMLParagraphElement>('rsvp-phone-notice');
+
+    phone.addEventListener('blur', () => {
+      notice.textContent = '';
+
+      const assembled = e164();
+      if (!/^\+[1-9][0-9]{7,14}$/.test(assembled)) return;
+      if (assembled === checkedNumber) return;
+      checkedNumber = assembled;
+
+      void checkDuplicate(assembled);
+    });
+
+    /** Solves the check widget, asks the function, and shows the note. */
+    async function checkDuplicate(number: string): Promise<void> {
+      const ts = (window as any).turnstile;
+      if (!ts || checkWidgetId === undefined) return;
+
+      let token = '';
+      try {
+        token = await new Promise<string>((resolve) => {
+          pendingCheck = resolve;
+          /* Reset first: the widget may already hold a spent token from a
+             previous check, and `execute` on a solved widget is a no-op. */
+          ts.reset(checkWidgetId);
+          ts.execute(checkWidgetId);
+          // Never leave the guest's blur handler hanging on Cloudflare.
+          setTimeout(() => {
+            if (pendingCheck === resolve) { pendingCheck = null; resolve(''); }
+          }, 8000);
+        });
+      } catch {
+        return;
+      }
+      if (!token) return;
+
+      try {
+        const response = await fetch(FUNCTION_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${ANON_KEY}`,
+            apikey: ANON_KEY,
+          },
+          body: JSON.stringify({ action: 'check_phone', phone: number, turnstile_token: token }),
+        });
+        const result = await response.json().catch(() => ({}));
+        /* Anything other than a clear yes is treated as "no warning". A rate
+           limit, a network blip or a server error must never turn into a
+           message that makes a guest doubt their own reply. */
+        if (response.ok && result.exists === true && phone.value.trim()) {
+          notice.textContent =
+            'Someone has already replied with this number. If that was you, ' +
+            'there’s no need to reply again — but if you’re replying for someone ' +
+            'else in your family, please carry on.';
+        }
+      } catch {
+        /* Silent by design. */
+      }
+    }
 
     /** Returns the first control that failed, or null when everything passed. */
     function validate(): HTMLElement | null {
@@ -628,7 +714,6 @@ const primary = CONTACTS[0];
         [first, 'rsvp-first-error', checkName(first, 'first name')],
         [last, 'rsvp-last-error', checkName(last, 'last name')],
         [phone, 'rsvp-phone-error', checkPhone()],
-        [email, 'rsvp-email-error', checkEmail()],
       ];
 
       for (const [el, id, text] of checks) setError(el, id, text);
@@ -678,9 +763,29 @@ const primary = CONTACTS[0];
       turnstileRequested = true;
 
       (window as any).__rsvpTurnstileReady = () => {
-        widgetId = (window as any).turnstile?.render('#rsvp-turnstile', {
+        const ts = (window as any).turnstile;
+        widgetId = ts?.render('#rsvp-turnstile', {
           sitekey: SITE_KEY,
           theme: 'light',
+        });
+        /* The duplicate check's own widget. `execute` mode means it renders
+           nothing and solves only when asked, so it costs a guest nothing
+           unless they type a phone number — and it can never consume the
+           submit token above. */
+        checkWidgetId = ts?.render('#rsvp-turnstile-check', {
+          sitekey: SITE_KEY,
+          appearance: 'execute',
+          execution: 'execute',
+          callback: (token: string) => {
+            const waiting = pendingCheck;
+            pendingCheck = null;
+            if (waiting) waiting(token);
+          },
+          'error-callback': () => {
+            const waiting = pendingCheck;
+            pendingCheck = null;
+            if (waiting) waiting('');
+          },
         });
       };
       const s = document.createElement('script');
@@ -787,8 +892,10 @@ const primary = CONTACTS[0];
       const payload = {
         first_name: trim(first.value),
         last_name: trim(last.value),
-        phone: e164(),
-        email: trim(email.value) || null,
+        /* null, not "+91". With no digits typed, `e164()` returns the country
+           code on its own, which is not a phone number and would be rejected
+           by both the function and the CHECK constraint. */
+        phone: phone.value.replace(/\D/g, '') ? e164() : null,
         attending_mass: answer('attending_mass'),
         attending_reception: answer('attending_reception'),
         companions: companionsField.hidden ? [] : companions(),
@@ -846,7 +953,6 @@ const primary = CONTACTS[0];
         ['Name', `${payload.first_name} ${payload.last_name}`],
         ['Phone', payload.phone],
       ];
-      if (payload.email) items.push(['Email', payload.email]);
       items.push(['Wedding Mass', yesNo(payload.attending_mass)]);
       items.push(['Reception', yesNo(payload.attending_reception)]);
       if (payload.companions.length) {
@@ -1244,6 +1350,30 @@ const primary = CONTACTS[0];
        blocked. */
     min-height: 65px;
     margin-top: clamp(1.5rem, 3vw, 2rem);
+  }
+
+  /* Ochre, not brick. This is a note about a situation that is probably fine —
+     a family sharing one handset — and colouring it like an error would tell a
+     guest they have done something wrong when they have not. */
+  .rsvp__notice {
+    margin-top: 0.5rem;
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--color-ochre);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--color-muted);
+  }
+
+  .rsvp__notice:empty {
+    margin-top: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  /* The duplicate check's widget renders nothing in `execute` mode, but a
+     stray inline frame can still occupy a line box. */
+  .rsvp__turnstile-check {
+    display: none;
   }
 
   .rsvp__error {

@@ -8,6 +8,10 @@
  * here. `anon` has no privileges on the table at all (see 0001_rsvps.sql); this
  * function writes with the service role, which bypasses RLS.
  *
+ * Two actions:
+ *   (default)      submit a reply
+ *   check_phone    answer, with one boolean, whether a number has replied
+ *
  * Everything the client sends is re-validated here against the same rules the
  * database enforces. The client's copy of those rules is a courtesy to the
  * guest, not a control.
@@ -32,8 +36,25 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 const MAX_COMPANIONS = 20;
-const RATE_WINDOW_MINUTES = 10;
-const RATE_MAX_ROWS = 3;
+
+/** Per phone number, as before — only applies to replies that carry one. */
+const PHONE_WINDOW_MINUTES = 10;
+const PHONE_MAX = 3;
+
+/**
+ * Per caller, because the phone is now optional and every reply without one
+ * would otherwise share a single (null) key and be unlimited.
+ */
+const SUBMIT_WINDOW_MINUTES = 10;
+const SUBMIT_MAX = 5;
+
+/**
+ * The duplicate check is deliberately throttled far harder than the form. It
+ * answers "is this number on the guest list", which is exactly the question an
+ * attacker with a list of numbers would want answered in bulk.
+ */
+const CHECK_WINDOW_MINUTES = 1;
+const CHECK_MAX = 10;
 
 function corsHeaders(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
@@ -48,11 +69,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   return headers;
 }
 
-function json(
-  body: unknown,
-  status: number,
-  origin: string | null,
-): Response {
+function json(body: unknown, status: number, origin: string | null): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
@@ -78,15 +95,27 @@ function clean(value: unknown): string {
 }
 
 /**
- * To E.164. Accepts the shapes people actually type — spaces, dashes, brackets,
- * a leading 00 — and rejects anything still not conforming afterwards. A local
- * number with no country code is rejected rather than guessed at: this guest
- * list spans India and Switzerland and a wrong guess is worse than a prompt.
+ * To E.164, or null.
+ *
+ * The phone is optional now, so an empty value is a legitimate answer and
+ * returns null. A NON-empty value that does not conform is still a rejection —
+ * "they left it blank" and "they typed something wrong" must not collapse into
+ * the same outcome, or a typo is silently stored as no number at all.
+ *
+ * Accepts the shapes people actually type — spaces, dashes, brackets, a leading
+ * 00. A local number with no country code is rejected rather than guessed at:
+ * this guest list spans India and Switzerland and a wrong guess is worse than a
+ * prompt.
  */
-function toE164(raw: unknown): string | null {
-  const s = clean(raw).replace(/[\s()\-.]/g, '');
+function toE164(raw: unknown): { ok: true; value: string | null } | { ok: false } {
+  const cleaned = clean(raw);
+  if (cleaned.length === 0) return { ok: true, value: null };
+
+  const s = cleaned.replace(/[\s()\-.]/g, '');
   const withPlus = s.startsWith('00') ? `+${s.slice(2)}` : s;
-  return /^\+[1-9][0-9]{7,14}$/.test(withPlus) ? withPlus : null;
+  return /^\+[1-9][0-9]{7,14}$/.test(withPlus)
+    ? { ok: true, value: withPlus }
+    : { ok: false };
 }
 
 type Companion = { name: string; type: 'adult' | 'child' };
@@ -108,17 +137,120 @@ function parseCompanions(raw: unknown): Companion[] | null {
   return out;
 }
 
+/* -------------------------------------------------------------------------
+   Caller identity, for rate limiting only
+   ------------------------------------------------------------------------- */
+
+function callerIp(req: Request): string {
+  return (
+    req.headers.get('CF-Connecting-IP') ??
+    req.headers.get('X-Forwarded-For')?.split(',')[0].trim() ??
+    'unknown'
+  );
+}
+
+/**
+ * sha256(ip || pepper), hex — never the address itself. See 0005_rate_hits.sql.
+ *
+ * The pepper is derived from the service-role key rather than configured
+ * separately, with a domain-separation prefix so it cannot collide with any
+ * other use of that key. That key is injected by the platform and never leaves
+ * the server, so this needs no new secret and cannot be forgotten at deploy
+ * time — a missing pepper would otherwise mean an unpeppered hash, and an
+ * unpeppered hash of an IPv4 address is reversible by enumeration in seconds.
+ *
+ * Set RATE_LIMIT_PEPPER to override; rotating either value simply invalidates
+ * the existing counters, which expire in minutes anyway.
+ */
+async function hashCaller(ip: string): Promise<string> {
+  const pepper =
+    Deno.env.get('RATE_LIMIT_PEPPER') ??
+    `rsvp-rate-limit:${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`;
+  const bytes = new TextEncoder().encode(`${ip}|${pepper}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Records this call and reports whether the caller is now over the limit.
+ *
+ * Counts first, then inserts, so the Nth call is allowed and the (N+1)th is
+ * not. Old rows are deleted on every write — the table is a counter with a
+ * short memory, not a log of who visited.
+ *
+ * Fails OPEN on a database error. A guest who cannot reply because the rate
+ * limiter is broken is a worse outcome than a bot getting one extra attempt,
+ * and Turnstile is still in front of every path that calls this.
+ */
+async function overLimit(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+  keyHash: string,
+  kind: 'submit' | 'check',
+  windowMinutes: number,
+  max: number,
+): Promise<boolean> {
+  try {
+    /* Through an RPC, not `.schema('private').from(...)`. supabase-js talks to
+       PostgREST, and PostgREST only routes to its configured schemas — it does
+       not serve `private`, so a direct table call fails no matter what the
+       service role is allowed to do. That version failed *silently*: the error
+       was caught below, the limiter failed open, and every caller was
+       unlimited while appearing to be limited. See 0006_rate_hit_rpc.sql. */
+    const { data, error } = await db.rpc('rate_hit', {
+      p_key_hash: keyHash,
+      p_kind: kind,
+      p_window_seconds: windowMinutes * 60,
+      p_max: max,
+    });
+    if (error) throw error;
+    return data === true;
+  } catch (err) {
+    console.error('rsvp: rate check failed, allowing', String(err));
+    return false;
+  }
+}
+
+/** Verifies a Turnstile token. Single-use: Cloudflare will not accept it twice. */
+async function turnstileOk(token: string, ip: string): Promise<boolean | 'error'> {
+  const secret = Deno.env.get('TURNSTILE_SECRET_KEY');
+  if (!secret) {
+    console.error('rsvp: TURNSTILE_SECRET_KEY is not set');
+    return 'error';
+  }
+  try {
+    const form = new FormData();
+    form.append('secret', secret);
+    form.append('response', token);
+    if (ip && ip !== 'unknown') form.append('remoteip', ip);
+
+    const verify = await fetch(
+      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+      { method: 'POST', body: form },
+    );
+    const result = (await verify.json()) as { success?: boolean; 'error-codes'?: string[] };
+    if (!result.success) {
+      console.warn('rsvp: turnstile rejected', result['error-codes'] ?? []);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('rsvp: turnstile request failed', String(err));
+    return 'error';
+  }
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   const origin = req.headers.get('Origin');
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders(origin) });
   }
-
   if (req.method !== 'POST') {
     return json({ ok: false, error: 'validation_failed' }, 405, origin);
   }
-
   if (!req.headers.get('Content-Type')?.includes('application/json')) {
     return fail('validation_failed', 415, origin);
   }
@@ -134,6 +266,62 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail('validation_failed', 400, origin);
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('rsvp: supabase env missing');
+    return fail('server_error', 500, origin);
+  }
+  const db = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const ip = callerIp(req);
+  const callerHash = await hashCaller(ip);
+  const token = typeof body.turnstile_token === 'string' ? body.turnstile_token : '';
+
+  /* -----------------------------------------------------------------------
+     Action: check_phone
+     -----------------------------------------------------------------------
+     Returns one boolean and nothing else — no name, no count, no id. The
+     caller learns only what they could already learn by submitting a reply and
+     seeing whether it was rate-limited, and they pay a Turnstile solve for it.
+  ----------------------------------------------------------------------- */
+  if (body.action === 'check_phone') {
+    if (await overLimit(db, callerHash, 'check', CHECK_WINDOW_MINUTES, CHECK_MAX)) {
+      console.warn('rsvp: check_phone rate_limited');
+      return fail('rate_limited', 429, origin);
+    }
+
+    if (!token) return fail('captcha_failed', 403, origin);
+    const captcha = await turnstileOk(token, ip);
+    if (captcha === 'error') return fail('server_error', 502, origin);
+    if (!captcha) return fail('captcha_failed', 403, origin);
+
+    const phone = toE164(body.phone);
+    // A malformed or absent number is not an error here — there is simply
+    // nothing to warn about.
+    if (!phone.ok || phone.value === null) {
+      return json({ ok: true, exists: false }, 200, origin);
+    }
+
+    try {
+      const { count, error } = await db
+        .from('rsvps')
+        .select('id', { count: 'exact', head: true })
+        .eq('phone_normalised', phone.value.replace(/[^0-9]/g, ''));
+      if (error) throw error;
+      return json({ ok: true, exists: (count ?? 0) > 0 }, 200, origin);
+    } catch (err) {
+      console.error('rsvp: check_phone failed', String(err));
+      return fail('server_error', 500, origin);
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     Action: submit
+  ----------------------------------------------------------------------- */
+
   // 1. Honeypot. A field no human ever sees, so anything in it is a bot.
   //    Answer 200 with a plausible id: a bot that gets a 400 learns it was
   //    caught and tries something else, a bot that gets a success does not.
@@ -142,47 +330,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ ok: true, id: crypto.randomUUID() }, 200, origin);
   }
 
-  // 2. Turnstile, before any other work — it is the cheapest way to stop the
-  //    rest of this function being a free validation oracle.
-  const turnstileSecret = Deno.env.get('TURNSTILE_SECRET_KEY');
-  if (!turnstileSecret) {
-    console.error('rsvp: TURNSTILE_SECRET_KEY is not set');
-    return fail('server_error', 500, origin);
+  // 2. Per-caller limit, before Turnstile: it is the cheaper of the two checks
+  //    and the only one that survives the phone being optional.
+  if (await overLimit(db, callerHash, 'submit', SUBMIT_WINDOW_MINUTES, SUBMIT_MAX)) {
+    console.warn('rsvp: submit rate_limited (caller)');
+    return fail('rate_limited', 429, origin);
   }
 
-  const token = typeof body.turnstile_token === 'string' ? body.turnstile_token : '';
+  // 3. Turnstile, before any validation work — it is the cheapest way to stop
+  //    the rest of this function being a free validation oracle.
   if (!token) return fail('captcha_failed', 403, origin);
+  const captcha = await turnstileOk(token, ip);
+  if (captcha === 'error') return fail('server_error', 502, origin);
+  if (!captcha) return fail('captcha_failed', 403, origin);
 
-  try {
-    const form = new FormData();
-    form.append('secret', turnstileSecret);
-    form.append('response', token);
-    const ip = req.headers.get('CF-Connecting-IP') ??
-      req.headers.get('X-Forwarded-For')?.split(',')[0].trim();
-    if (ip) form.append('remoteip', ip);
-
-    const verify = await fetch(
-      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-      { method: 'POST', body: form },
-    );
-    const result = await verify.json() as { success?: boolean; 'error-codes'?: string[] };
-
-    if (!result.success) {
-      // Cloudflare's own codes describe the token, not the person.
-      console.warn('rsvp: turnstile rejected', result['error-codes'] ?? []);
-      return fail('captcha_failed', 403, origin);
-    }
-  } catch (err) {
-    console.error('rsvp: turnstile request failed', String(err));
-    return fail('server_error', 502, origin);
-  }
-
-  // 3. Validate everything, mirroring the database constraints.
+  // 4. Validate everything, mirroring the database constraints.
   const first_name = clean(body.first_name);
   const last_name = clean(body.last_name);
   const phone = toE164(body.phone);
-  const emailRaw = clean(body.email);
-  const email = emailRaw.length ? emailRaw.toLowerCase() : null;
   const message = clean(body.message);
   const companions = parseCompanions(body.companions);
 
@@ -192,8 +357,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const invalid =
     first_name.length < 1 || first_name.length > 80 ||
     last_name.length < 1 || last_name.length > 80 ||
-    phone === null ||
-    (email !== null && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) ||
+    !phone.ok ||
     typeof attending_mass !== 'boolean' ||
     typeof attending_reception !== 'boolean' ||
     companions === null ||
@@ -206,56 +370,50 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail('validation_failed', 400, origin);
   }
 
-  // 4. A decline needs no guest list.
+  // 5. A decline needs no guest list.
   if (!attending_mass && !attending_reception && companions!.length > 0) {
     console.warn('rsvp: validation_failed (declined with companions)');
     return fail('validation_failed', 400, origin);
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error('rsvp: supabase env missing');
-    return fail('server_error', 500, origin);
-  }
-
-  const db = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const phoneNormalised = phone!.replace(/[^0-9]/g, '');
-
-  // 5. Rate limit, per phone rather than per IP: a family replying from one
-  //    house shares an address, and blocking them is worse than letting a
-  //    determined bot through a captcha it already had to solve.
-  try {
-    const since = new Date(Date.now() - RATE_WINDOW_MINUTES * 60_000).toISOString();
-    const { count, error } = await db
-      .from('rsvps')
-      .select('id', { count: 'exact', head: true })
-      .eq('phone_normalised', phoneNormalised)
-      .gte('created_at', since);
-
-    if (error) throw error;
-    if ((count ?? 0) >= RATE_MAX_ROWS) {
-      console.warn('rsvp: rate_limited');
-      return fail('rate_limited', 429, origin);
+  // 6. Per-phone limit, kept for replies that carry a number: a family replying
+  //    from one house shares an address, and blocking them on the IP limit
+  //    alone would be worse than letting a determined bot through a captcha it
+  //    already had to solve. Skipped entirely when there is no number.
+  const phoneValue = (phone as { value: string | null }).value;
+  if (phoneValue) {
+    try {
+      const since = new Date(Date.now() - PHONE_WINDOW_MINUTES * 60_000).toISOString();
+      const { count, error } = await db
+        .from('rsvps')
+        .select('id', { count: 'exact', head: true })
+        .eq('phone_normalised', phoneValue.replace(/[^0-9]/g, ''))
+        .gte('created_at', since);
+      if (error) throw error;
+      if ((count ?? 0) >= PHONE_MAX) {
+        console.warn('rsvp: rate_limited (phone)');
+        return fail('rate_limited', 429, origin);
+      }
+    } catch (err) {
+      console.error('rsvp: phone rate check failed', String(err));
+      return fail('server_error', 500, origin);
     }
-  } catch (err) {
-    console.error('rsvp: rate check failed', String(err));
-    return fail('server_error', 500, origin);
   }
 
-  // 6. Insert. `select('id')` returns only the id — the stored row is never
+  // 7. Insert. `select('id')` returns only the id — the stored row is never
   //    echoed back, so a caller cannot use this endpoint to read anything.
+  //
+  //    `email` is deliberately absent. The field was removed from the form in
+  //    13b; the COLUMN is deliberately kept, nullable and unused, because
+  //    dropping it would need a migration and destroy the addresses already
+  //    collected for no benefit. Nothing writes it any more.
   try {
     const { data, error } = await db
       .from('rsvps')
       .insert({
         first_name,
         last_name,
-        phone,
-        email,
+        phone: phoneValue,
         attending_mass,
         attending_reception,
         companions,
