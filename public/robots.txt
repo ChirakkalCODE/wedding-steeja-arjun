@@ -1,0 +1,17 @@
+# Everything is open except the guest list.
+#
+# This is a request, not a control — a crawler may ignore it and a person can
+# type the URL. What actually protects the replies is Row Level Security plus
+# the `private.admins` allowlist: the anon key is published in the client bundle
+# by design, and an account that is not on the allowlist reads nothing even when
+# signed in. See supabase/migrations/0002 and 0003.
+#
+# /admin is kept out of search three ways, of which this is the weakest:
+#   1. `noindex, nofollow` on the page itself
+#   2. excluded from sitemap.xml (see astro.config.mjs)
+#   3. this line
+User-agent: *
+Allow: /
+Disallow: /wedding-steeja-arjun/admin
+
+Sitemap: https://chirakkalcode.github.io/wedding-steeja-arjun/sitemap-index.xml

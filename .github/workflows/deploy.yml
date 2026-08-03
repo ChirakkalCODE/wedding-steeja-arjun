@@ -32,6 +32,18 @@ jobs:
         uses: withastro/action@v3
         with:
           node-version: 22
+        # Repository *variables*, not secrets, and deliberately so: all three
+        # are compiled into the client bundle by Astro and are readable by
+        # anyone who opens devtools on the deployed site. Calling them secrets
+        # would imply a protection that does not exist. See .env.example.
+        #
+        # They are not optional. Without them the build still succeeds and
+        # silently ships `undefined` into the RSVP form's function URL and the
+        # Turnstile site key — a reply form that looks perfect and cannot send.
+        env:
+          PUBLIC_SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ vars.PUBLIC_SUPABASE_ANON_KEY }}
+          PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.PUBLIC_TURNSTILE_SITE_KEY }}
 
   deploy:
     name: Deploy
