@@ -14,7 +14,21 @@ import phoneSource from '../assets/photos/EPW09695-phone.jpg';
  * The 5760x8640 original is never referenced directly by the page; every URL
  * below is a processed derivative.
  */
-export const HERO_WIDTHS = [640, 960, 1400, 1920];
+/**
+ * The rungs the browser gets to choose between. 1200 is not decoration: a
+ * 412x823 phone at DPR 1.75 — Lighthouse's emulated handset, and an ordinary
+ * mid-range Android — paints the 4:5 crop 658 CSS px wide, which is about 1150
+ * device pixels. With rungs at 960 and 1400 and nothing between, the browser
+ * has to take 1400 and then throw a quarter of it away; Lighthouse costed that
+ * at 53 kB on the one image that is also the mobile LCP.
+ *
+ * Deliberately a rung rather than a change to PHONE_SIZES or to the crop. The
+ * crop is art direction and is not a performance dial, and `150vw` is a
+ * documented approximation of a value that genuinely depends on viewport
+ * height — sharpening either would trade a measured saving for an unmeasured
+ * regression on every other screen size.
+ */
+export const HERO_WIDTHS = [640, 960, 1200, 1400, 1920];
 
 /** Below this the phone crop is used, at or above it the full frame. */
 export const PHONE_MEDIA = '(max-width: 899.98px)';

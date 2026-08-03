@@ -19,6 +19,12 @@
   --color-ink: #241C18; /* text, solid buttons */
   --color-muted: #7A6B5F; /* secondary text, captions */
   --color-ochre: #C58A2A; /* hairlines, small markers, focus ring — sparingly */
+  /* Validation errors, and nothing else on the site. A red that belongs to the
+     same warm, slightly dusty family as the other four rather than a browser
+     red — it has to read as "this needs your attention" without reading as
+     "something has broken". Checked at 7.1:1 on the shell, so a small error
+     line is legible to the eyesight this page is built for. */
+  --color-brick: #9A3412;
 
   --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
   --font-body: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;

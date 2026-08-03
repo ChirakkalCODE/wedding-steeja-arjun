@@ -17,12 +17,27 @@ import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
             {/* Facade, not an iframe. Google's embed pulls well over a megabyte
                 and a pile of third-party script; none of it loads until someone
                 asks for it. */}
-            <div class="venue__map" data-map data-embed={mapEmbedSrc(event)}>
+            <div
+              class="venue__map"
+              data-map
+              data-embed={mapEmbedSrc(event)}
+              data-title={`Map of ${event.venue}, ${event.area}`}
+            >
+              {/* The accessible name BEGINS with the button's own visible text,
+                  verbatim — "<venue name> Load map" — and only then adds the
+                  area. That ordering is the whole requirement: WCAG 2.5.3 asks
+                  that what a speech-input user reads aloud is contained in what
+                  the control answers to, and axe enforces it as a substring
+                  match on the concatenated visible text. An aria-label that
+                  merely described the same thing in different words ("Load the
+                  map of …") read as a different control to anyone saying the
+                  words on the screen, which is what failed here. Edit the two
+                  spans below and this string has to move with them. */}
               <button
                 type="button"
                 class="venue__facade"
                 data-map-button
-                aria-label={`Load the map of ${event.venue}, ${event.area}`}
+                aria-label={`${event.venue} Load map — ${event.area}`}
               >
                 <svg
                   class="venue__pin"
@@ -40,7 +55,11 @@ import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
                   <circle cx="12" cy="10" r="2.5" />
                 </svg>
                 <span class="venue__facade-name">{event.venue}</span>
-                <span class="venue__facade-cta">Tap to load map</span>
+                {/* "Load map", not "Tap to load map". Half the people who use
+                    this will click it and some will press Enter on it, and the
+                    shorter string is also the one the accessible name above has
+                    to carry verbatim. */}
+                <span class="venue__facade-cta">Load map</span>
               </button>
             </div>
 
@@ -88,7 +107,12 @@ import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
         button.addEventListener('click', function () {
           var frame = document.createElement('iframe');
           frame.src = holder.getAttribute('data-embed');
-          frame.title = button.getAttribute('aria-label').replace(/^Load the map/, 'Map');
+          // From its own attribute rather than rewritten out of the button's
+          // aria-label. That label now has to match the visible text word for
+          // word, so it is no longer a string this is free to reshape — and a
+          // regex that silently stops matching leaves the iframe titled "Load
+          // map — Akaparambu".
+          frame.title = holder.getAttribute('data-title');
           frame.loading = 'lazy';
           frame.referrerPolicy = 'no-referrer-when-downgrade';
           frame.setAttribute('allowfullscreen', '');
@@ -145,6 +169,26 @@ import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
     /* A second surface tone, mixed from the two palette tokens rather than
        introduced as a new colour. */
     --surface-2: color-mix(in srgb, var(--color-shell) 94%, var(--color-ink));
+
+    /* --------------------------------------------------------------------
+       Two tones that exist only because --surface-2 is darker than the page,
+       and a colour chosen against the page is not automatically legible on
+       it. Both are mixed from the palette rather than picked, so neither is
+       a fifth colour — they are the existing two, one step deeper.
+
+       --facade-ink   the placeholder's small uppercase caption. --color-muted
+                      measured 4.31:1 on --surface-2 at 10.9px, where WCAG asks
+                      4.5:1 for text that size. This is 5.8:1, and still 5.0:1
+                      on the darker hover fill.
+       --facade-line  the 1px rule around the placeholder and the loaded map.
+                      Plain --color-ochre is 2.6:1 on --surface-2, under the
+                      3:1 that WCAG 1.4.11 asks of a component boundary. This
+                      is 3.5:1. It is the only ochre on the site that is a
+                      component edge rather than a hairline over paper, which
+                      is why it is the only one that had to move.
+       -------------------------------------------------------------------- */
+    --facade-ink: color-mix(in srgb, var(--color-muted) 78%, var(--color-ink));
+    --facade-line: color-mix(in srgb, var(--color-ochre) 80%, var(--color-ink));
   }
 
   .venue__eyebrow {
@@ -205,7 +249,7 @@ import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
     display: block;
     width: 100%;
     height: 100%;
-    border: 1px solid var(--color-ochre);
+    border: 1px solid var(--facade-line);
   }
 
   .venue__facade {
@@ -216,7 +260,7 @@ import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
     gap: 0.6rem;
     padding: 1.5rem;
     background-color: var(--surface-2);
-    color: var(--color-muted);
+    color: var(--facade-ink);
     font: inherit;
     text-align: center;
     cursor: pointer;
@@ -228,8 +272,13 @@ import { EVENTS, addressOf, mapEmbedSrc } from '../data/wedding';
     background-color: color-mix(in srgb, var(--color-shell) 88%, var(--color-ink));
   }
 
+  /* Follows the border rather than staying plain ochre: the two sit inside the
+     same panel and a pin one step lighter than the rule around it reads as an
+     inconsistency rather than as a highlight. Decorative and aria-hidden, so
+     no contrast minimum applies to it — this is only so the panel is one
+     drawing. */
   .venue__pin {
-    color: var(--color-ochre);
+    color: var(--facade-line);
   }
 
   .venue__facade-name {

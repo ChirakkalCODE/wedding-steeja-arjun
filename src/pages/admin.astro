@@ -1,0 +1,708 @@
+---
+/**
+ * /admin — the guest list.
+ *
+ * The only page on this site that loads `@supabase/supabase-js`. It is imported
+ * from `src/lib/admin/app.ts`, which nothing on the public page imports, so the
+ * library lands in this page's chunk and nowhere else. Astro's per-page
+ * bundling is what keeps that true; the check is in the README.
+ *
+ * Client-rendered in full. GitHub Pages serves static files and cannot inspect
+ * a session, so there is no server-side "are you signed in" to gate on — the
+ * page ships as a shell and the script decides what to show. That is not the
+ * protection either way: see the header comment in app.ts. The protection is
+ * RLS plus the `private.admins` allowlist, which would refuse these same
+ * requests made with curl and the published anon key.
+ *
+ * Deliberately not linked from anywhere on the public site.
+ */
+import { withBase } from '../lib/paths';
+import '../styles/global.css';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Guest list</title>
+
+    {/* Obscurity is not the control — RLS is — but there is no reason for this
+        to be in an index. There is no sitemap in this project to exclude it
+        from (no @astrojs/sitemap integration is configured); public/robots.txt
+        disallows the path as well, so the two agree. */}
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="googlebot" content="noindex, nofollow" />
+
+    <meta name="theme-color" content="#FBF8F3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#241C18" media="(prefers-color-scheme: dark)" />
+    {/* Through `withBase`, not a hand-written absolute path: this is a project
+        Pages site and the base prefix is configuration, not a constant. */}
+    <link rel="icon" type="image/svg+xml" href={withBase('favicon.svg')} />
+    <link rel="icon" type="image/x-icon" sizes="32x32" href={withBase('favicon.ico')} />
+    <link rel="apple-touch-icon" sizes="180x180" href={withBase('apple-touch-icon.png')} />
+  </head>
+
+  <body class="admin-body">
+    {/* Replaced wholesale by the script. The text is what someone sees if the
+        script fails or is still arriving — never a blank page. */}
+    <main class="admin" id="admin-root">
+      <p class="admin__state">Loading the guest list…</p>
+    </main>
+
+    <noscript>
+      <p class="admin__state">
+        This page needs JavaScript: it reads the guest list from the database in
+        your browser.
+      </p>
+    </noscript>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
+    <script>
+      import { start } from '../lib/admin/app';
+
+      const mount = document.getElementById('admin-root');
+      if (mount) {
+        start(mount).catch((error) => {
+          /* Last resort. Anything that escapes `start` would otherwise leave
+             the "Loading…" text on screen forever, which reads as a hang. */
+          console.error('admin: failed to start', error);
+          mount.textContent =
+            'Something went wrong loading this page. Please reload.';
+        });
+      }
+    </script>
+
+    <style is:global>
+      /* ---------------------------------------------------------------------
+         Plainer than the public site, on purpose. This is a working tool the
+         couple will open on a phone, probably standing up, possibly to check
+         one number. So: no reveal animations, no handwriting face, no grain,
+         no lantern glow — all four are switched off below rather than simply
+         not used, because global.css attaches three of them to `html` and
+         `body` for every page in the project.
+
+         What is kept is the palette and the two workhorse typefaces, so it
+         still looks like it belongs to the same wedding.
+      --------------------------------------------------------------------- */
+      html::before,
+      body::before,
+      body::after {
+        display: none !important;
+        content: none !important;
+        animation: none !important;
+      }
+
+      html {
+        scroll-behavior: auto;
+        background-color: var(--color-shell);
+      }
+
+      .admin-body {
+        margin: 0;
+        color: var(--color-ink);
+        font-family: var(--font-body);
+        /* 16px floor: this is edited on a phone and anything smaller makes iOS
+           zoom on every focus. */
+        font-size: 1rem;
+        line-height: 1.55;
+      }
+
+      .admin {
+        max-width: 78rem;
+        margin-inline: auto;
+        padding: clamp(1rem, 4vw, 2.5rem);
+      }
+
+      .admin__sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+
+      /* -- header ---------------------------------------------------------- */
+
+      .admin__header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px solid rgb(var(--ink-rgb) / 0.12);
+      }
+
+      .admin__header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .admin__title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-weight: 400;
+        font-size: clamp(1.75rem, 5vw, 2.5rem);
+        line-height: 1.1;
+      }
+
+      .admin__lead {
+        margin: 0.25rem 0 0;
+        color: var(--color-muted);
+        font-size: 0.95rem;
+      }
+
+      /* -- login ----------------------------------------------------------- */
+
+      .admin__centre {
+        display: flex;
+        justify-content: center;
+        padding-block: clamp(2rem, 10vh, 6rem);
+      }
+
+      .admin__login {
+        width: 100%;
+        max-width: 24rem;
+      }
+
+      .admin__label {
+        display: block;
+        margin-top: 1.1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+
+      .admin__input {
+        display: block;
+        width: 100%;
+        min-height: 48px;
+        margin-top: 0.35rem;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid rgb(var(--ink-rgb) / 0.25);
+        border-radius: 4px;
+        background-color: var(--color-shell);
+        color: var(--color-ink);
+        font-family: inherit;
+        font-size: 1rem;
+        line-height: 1.4;
+      }
+
+      .admin__input:focus-visible {
+        border-color: var(--color-ochre);
+      }
+
+      .admin__textarea {
+        min-height: 5rem;
+        resize: vertical;
+      }
+
+      .admin__error {
+        margin: 0.85rem 0 0;
+        color: var(--color-brick);
+        font-size: 0.95rem;
+      }
+
+      .admin__error:empty {
+        margin: 0;
+      }
+
+      /* -- buttons --------------------------------------------------------- */
+
+      .admin__button {
+        min-height: 48px;
+        margin-top: 1.25rem;
+        padding: 0.6rem 1.4rem;
+        border: 1px solid var(--color-ink);
+        border-radius: 999px;
+        background-color: var(--color-ink);
+        color: var(--color-shell);
+        font-family: inherit;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+
+      .admin__button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .admin__button--quiet {
+        margin-top: 0;
+        background-color: transparent;
+        color: var(--color-ink);
+      }
+
+      .admin__button--quiet:hover:not(:disabled) {
+        background-color: var(--color-ink);
+        color: var(--color-shell);
+      }
+
+      .admin__button--danger {
+        border-color: var(--color-brick);
+        background-color: var(--color-brick);
+        color: var(--color-shell);
+      }
+
+      /* -- states ---------------------------------------------------------- */
+
+      .admin__state {
+        padding: clamp(1.5rem, 6vw, 3rem) 0;
+        color: var(--color-muted);
+      }
+
+      .admin__empty {
+        padding: clamp(2rem, 8vw, 4rem) 0;
+        max-width: 46ch;
+      }
+
+      .admin__empty-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 1.75rem;
+      }
+
+      .admin__empty-body {
+        margin: 0.5rem 0 0;
+        color: var(--color-muted);
+      }
+
+      .admin__empty-note {
+        margin: 1.25rem 0 0;
+        padding-top: 1rem;
+        border-top: 1px solid rgb(var(--ink-rgb) / 0.12);
+        color: var(--color-muted);
+        font-size: 0.9rem;
+      }
+
+      /* -- counters -------------------------------------------------------- */
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+        gap: 1px;
+        margin-top: 1.5rem;
+        border: 1px solid rgb(var(--ink-rgb) / 0.12);
+        background-color: rgb(var(--ink-rgb) / 0.12);
+      }
+
+      .stat {
+        padding: clamp(0.9rem, 2.5vw, 1.25rem);
+        background-color: var(--color-shell);
+      }
+
+      .stat__value {
+        margin: 0;
+        font-family: var(--font-display);
+        font-weight: 400;
+        font-size: clamp(2rem, 6vw, 2.75rem);
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .stat__label {
+        margin: 0.4rem 0 0;
+        font-size: 0.85rem;
+        line-height: 1.35;
+        color: var(--color-muted);
+      }
+
+      .stat__hint {
+        margin: 0.1rem 0 0;
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-muted);
+        opacity: 0.75;
+      }
+
+      /* -- toolbar --------------------------------------------------------- */
+
+      .toolbar {
+        margin-top: 1.75rem;
+      }
+
+      .toolbar__row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      .toolbar__search {
+        flex: 1 1 16rem;
+        margin-top: 0;
+      }
+
+      .toolbar__sort {
+        flex: 0 1 14rem;
+        margin-top: 0;
+      }
+
+      .toolbar__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+
+      .chip {
+        min-height: 44px;
+        padding: 0.4rem 1rem;
+        border: 1px solid rgb(var(--ink-rgb) / 0.25);
+        border-radius: 999px;
+        background: none;
+        color: var(--color-muted);
+        font-family: inherit;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+
+      .chip--on {
+        border-color: var(--color-ink);
+        background-color: var(--color-ink);
+        color: var(--color-shell);
+      }
+
+      /* -- table ----------------------------------------------------------- */
+
+      .table {
+        width: 100%;
+        margin-top: 1.25rem;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+
+      .table th {
+        padding: 0.6rem 0.5rem;
+        border-bottom: 1px solid rgb(var(--ink-rgb) / 0.25);
+        color: var(--color-muted);
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+
+      .row__cell {
+        padding: 0.55rem 0.5rem;
+        border-bottom: 1px solid rgb(var(--ink-rgb) / 0.1);
+        vertical-align: top;
+      }
+
+      .row--open > .row__cell {
+        border-bottom-color: transparent;
+        background-color: rgb(var(--ink-rgb) / 0.04);
+      }
+
+      .row__toggle {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--color-ink);
+        font: inherit;
+        font-weight: 500;
+        text-align: left;
+        text-decoration: underline;
+        text-decoration-color: rgb(var(--ink-rgb) / 0.25);
+        text-underline-offset: 3px;
+        cursor: pointer;
+      }
+
+      .row__phone {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      /* Amber, small, and advisory. Families share a phone; this is a note for
+         a human, never a rule the software acts on. */
+      .row__dupe {
+        margin-left: 0.4rem;
+        color: var(--color-ochre);
+        font-size: 0.8rem;
+        cursor: help;
+      }
+
+      .row__has-message {
+        color: var(--color-ink);
+      }
+
+      .row__expansion > td {
+        padding: 0 0.5rem 1.25rem;
+        border-bottom: 1px solid rgb(var(--ink-rgb) / 0.25);
+        background-color: rgb(var(--ink-rgb) / 0.04);
+      }
+
+      /* -- inline editor --------------------------------------------------- */
+
+      .editor__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+        gap: 0.75rem;
+      }
+
+      .editor__field {
+        display: block;
+      }
+
+      .editor__label {
+        display: block;
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--color-muted);
+      }
+
+      .editor__toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.25rem;
+        margin-top: 1rem;
+      }
+
+      .editor__toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 44px;
+        cursor: pointer;
+      }
+
+      .editor__toggle input {
+        width: 1.15rem;
+        height: 1.15rem;
+        accent-color: var(--color-ink);
+      }
+
+      .editor__block {
+        margin-top: 1.25rem;
+      }
+
+      .editor__heading {
+        margin: 0 0 0.5rem;
+        font-size: 0.78rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-muted);
+      }
+
+      .editor__empty {
+        margin: 0;
+        color: var(--color-muted);
+        font-size: 0.9rem;
+      }
+
+      .companion {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 0.75rem;
+        margin-top: 0.6rem;
+      }
+
+      .companion .admin__button {
+        margin-top: 0;
+        min-height: 44px;
+      }
+
+      .editor__danger {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgb(var(--ink-rgb) / 0.12);
+      }
+
+      .editor__danger .admin__button {
+        margin-top: 0;
+      }
+
+      /* -- confirm dialog -------------------------------------------------- */
+
+      .confirm {
+        width: min(28rem, calc(100vw - 2rem));
+        padding: clamp(1.25rem, 4vw, 2rem);
+        border: 1px solid rgb(var(--ink-rgb) / 0.25);
+        border-radius: 6px;
+        background-color: var(--color-shell);
+        color: var(--color-ink);
+      }
+
+      .confirm::backdrop {
+        background-color: rgb(var(--ink-rgb) / 0.45);
+      }
+
+      .confirm__title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-weight: 400;
+        font-size: 1.5rem;
+      }
+
+      .confirm__body {
+        margin: 0.5rem 0 1.25rem;
+        color: var(--color-muted);
+        font-size: 0.95rem;
+      }
+
+      .confirm__actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 1.5rem;
+      }
+
+      .confirm__actions .admin__button {
+        margin-top: 0;
+      }
+
+      /* -- toasts ---------------------------------------------------------- */
+
+      .toasts {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        width: min(26rem, calc(100vw - 2rem));
+      }
+
+      .toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid var(--color-ink);
+        border-radius: 4px;
+        background-color: var(--color-ink);
+        color: var(--color-shell);
+        font-size: 0.9rem;
+        box-shadow: 0 8px 24px rgb(36 28 24 / 0.18);
+      }
+
+      .toast--error {
+        border-color: var(--color-brick);
+        background-color: var(--color-brick);
+      }
+
+      .toast__text {
+        flex: 1;
+      }
+
+      .toast__close {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font-size: 1.1rem;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      /* ---------------------------------------------------------------------
+         Below 720px the table becomes stacked cards.
+
+         Deliberately not a horizontal scroller: eight columns on a 390px phone
+         means the couple swipes sideways to find out whether somebody is
+         coming, and the column they are reading is off screen from the header
+         that names it. Each cell grows its own label from `data-label` instead,
+         so every value stays beside the word for it.
+      --------------------------------------------------------------------- */
+      @media (max-width: 719.98px) {
+        .table,
+        .table thead,
+        .table tbody,
+        .table tr,
+        .table td {
+          display: block;
+          width: 100%;
+        }
+
+        .table thead {
+          /* The headings live in each cell now. */
+          display: none;
+        }
+
+        .row {
+          margin-top: 0.75rem;
+          border: 1px solid rgb(var(--ink-rgb) / 0.15);
+          border-radius: 6px;
+          padding: 0.35rem 0.75rem 0.6rem;
+        }
+
+        .row--open {
+          border-bottom-left-radius: 0;
+          border-bottom-right-radius: 0;
+        }
+
+        .row__cell {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 1rem;
+          padding: 0.4rem 0;
+          border-bottom: 1px solid rgb(var(--ink-rgb) / 0.08);
+          text-align: right;
+        }
+
+        .row__cell::before {
+          content: attr(data-label);
+          flex: none;
+          color: var(--color-muted);
+          font-size: 0.72rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          text-align: left;
+        }
+
+        /* The name is the card's heading rather than a labelled row. */
+        .row__cell:first-child {
+          padding-top: 0.5rem;
+          text-align: left;
+        }
+
+        .row__cell:first-child::before {
+          display: none;
+        }
+
+        .row__toggle {
+          font-size: 1.05rem;
+        }
+
+        .row__cell:last-child {
+          border-bottom: 0;
+        }
+
+        .row__expansion {
+          margin-top: 0;
+          border: 1px solid rgb(var(--ink-rgb) / 0.15);
+          border-top: 0;
+          border-radius: 0 0 6px 6px;
+        }
+
+        .row__expansion > td {
+          padding: 0.75rem;
+          border-bottom: 0;
+        }
+
+        .companion {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .toasts {
+          right: 0.5rem;
+          left: 0.5rem;
+          width: auto;
+        }
+      }
+    </style>
+  </body>
+</html>

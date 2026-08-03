@@ -103,6 +103,11 @@ const NAV = [
 ] as const;
 
 const CTA = 'Let us know';
+/* One constant for the two copies of this button — the capsule's pill and the
+   mobile menu's last item. They pointed at `#contact` while there was no reply
+   form; they point at the form now, and having drifted apart once already they
+   are no longer allowed to be edited one at a time. */
+const CTA_HREF = '#rsvp';
 ---
 
 {/* Runs before the header is parsed, so neither the burger nor the monogram is
@@ -156,7 +161,7 @@ const CTA = 'Let us know';
   </nav>
 
   <div class="topbar__end">
-    <a class="topbar__pill" href="#contact">{CTA}</a>
+    <a class="topbar__pill" href={CTA_HREF}>{CTA}</a>
 
     <button
       class="topbar__burger"
@@ -192,7 +197,7 @@ const CTA = 'Let us know';
         ))
       }
       <li>
-        <a class="menu__link menu__link--cta" href="#contact">
+        <a class="menu__link menu__link--cta" href={CTA_HREF}>
           {CTA}
         </a>
       </li>

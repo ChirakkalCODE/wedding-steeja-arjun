@@ -1,0 +1,1384 @@
+---
+/**
+ * The reply form.
+ *
+ * The word "RSVP" is the id and nothing else. It is an initialism of a French
+ * sentence, and a fair share of this guest list would have to be told what it
+ * stands for before they could answer it. Everything a guest reads here is a
+ * plain English question.
+ *
+ * ---------------------------------------------------------------------------
+ * Where the answer goes
+ * ---------------------------------------------------------------------------
+ * Straight to the deployed edge function, never to the database. `anon` has no
+ * privileges on `public.rsvps` at all — not insert, not anything — so a direct
+ * PostgREST call would be refused even if one were written. The function holds
+ * the Turnstile secret and writes with the service role. See the RLS block at
+ * the foot of supabase/migrations/0001_rsvps.sql before doubting this.
+ *
+ * The POST carries the anon key in `Authorization` and `apikey` because the
+ * deployed function has `verify_jwt` on: Supabase's gateway rejects the request
+ * before the function ever runs without it. That key is public by design and is
+ * already in the bundle — it grants nothing on its own.
+ *
+ * `@supabase/supabase-js` is deliberately not imported here. It is ~40 kB to do
+ * one `fetch` of one URL, and pulling it onto the guest page would also put a
+ * database client one autocomplete away from a future edit to this file.
+ *
+ * ---------------------------------------------------------------------------
+ * No JavaScript
+ * ---------------------------------------------------------------------------
+ * There is no progressive-enhancement story available: the site is a static
+ * build on GitHub Pages, so there is no server of ours to receive a native form
+ * POST, and the write is gated on a captcha that only a server can verify. So
+ * rather than shipping a form that silently does nothing, the form is hidden
+ * until the script that drives it has actually run and a WhatsApp fallback
+ * stands in its place until then.
+ *
+ * That gate is `.rsvp-js`, added by this component's own script as its first
+ * statement — NOT the page's `.js` class. `.js` is removed 2.5s after load by
+ * the reveal system's dead man's switch in index.astro, which would take the
+ * form with it. Nothing in this section may hang off `.js`.
+ *
+ * ---------------------------------------------------------------------------
+ * Turnstile
+ * ---------------------------------------------------------------------------
+ * Rendered explicitly, and the script is not in the document until the section
+ * first crosses the viewport. Cloudflare's api.js is ~80 kB and this section is
+ * the last but one on a long page — most visits will never reach it, and a
+ * visit that does not reach it should not pay for it. It also means the
+ * Lighthouse run, which never scrolls, measures a page that has no third-party
+ * script on it at all.
+ */
+import { CONTACTS } from '../data/contacts';
+import { DIAL_CODES } from '../data/dial-codes';
+
+/* India first because that is where most of this list is, Switzerland second
+   because that is where the rest of it is. Everything else is alphabetical by
+   name — `localeCompare` rather than a raw sort so Côte d'Ivoire, Curaçao,
+   Réunion, São Tomé and Türkiye land where an English reader looks for them.
+   Both run at build; the browser sorts nothing. */
+const PINNED = ['IN', 'CH'];
+const pinned = PINNED.map((iso) => DIAL_CODES.find((c) => c.iso === iso)!);
+const rest = DIAL_CODES.filter((c) => !PINNED.includes(c.iso)).sort((a, b) =>
+  a.name.localeCompare(b.name, 'en'),
+);
+
+/* The one contact the success panel offers. First in the list, and the same
+   person the Contact section leads with. */
+const primary = CONTACTS[0];
+---
+
+<section class="rsvp" id="rsvp" aria-labelledby="rsvp-title">
+  <div class="rsvp__inner">
+    <p class="rsvp__eyebrow" data-anim="head">One last thing</p>
+    <h2 class="rsvp__title" id="rsvp-title" data-anim="head2">
+      Will you be joining us?
+    </h2>
+
+    <p class="rsvp__intro">
+      Please let us know by 20 August 2026 &mdash; even if you&rsquo;ve already told us
+      in person. It helps us plan seating and food.
+    </p>
+
+    {/* Visible until the script below has run. Not `hidden` first and revealed
+        after: the failure this stands in for is "the script never ran", and a
+        fallback that needs the script to appear is no fallback. */}
+    <div class="rsvp__nojs">
+      <p class="rsvp__nojs-lead">
+        This form needs JavaScript. Please send your answer by WhatsApp instead.
+      </p>
+      <ul class="rsvp__nojs-list">
+        {
+          CONTACTS.map((contact) => (
+            <li>
+              <a
+                class="rsvp__nojs-link"
+                href={`https://wa.me/${contact.phone.replace(/\D/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {contact.name}
+                <span class="rsvp__nojs-number">{contact.display}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+
+    {/* `novalidate`: the browser's own bubbles cannot be styled, vanish on the
+        next click and are announced inconsistently. Validation below is ours,
+        on blur and on submit, and it writes into the page where it stays. */}
+    <form class="rsvp__form" id="rsvp-form" novalidate>
+      <!-- 1. Name --------------------------------------------------------- -->
+      <div class="rsvp__row rsvp__row--pair">
+        <div class="rsvp__field">
+          <label class="rsvp__label" for="rsvp-first">First name</label>
+          <input
+            class="rsvp__input"
+            id="rsvp-first"
+            name="first_name"
+            type="text"
+            maxlength="80"
+            autocomplete="given-name"
+            aria-describedby="rsvp-first-error"
+            required
+          />
+          <p class="rsvp__error" id="rsvp-first-error" role="alert"></p>
+        </div>
+
+        <div class="rsvp__field">
+          <label class="rsvp__label" for="rsvp-last">Last name</label>
+          <input
+            class="rsvp__input"
+            id="rsvp-last"
+            name="last_name"
+            type="text"
+            maxlength="80"
+            autocomplete="family-name"
+            aria-describedby="rsvp-last-error"
+            required
+          />
+          <p class="rsvp__error" id="rsvp-last-error" role="alert"></p>
+        </div>
+      </div>
+
+      <!-- 2. Phone -------------------------------------------------------- -->
+      {/* Two controls, one answer, so the label belongs to the group rather
+          than to either box. A <fieldset> with a <legend> is how that is said
+          without inventing an ARIA pattern; each control then carries its own
+          short <label>, hidden from sight but not from a screen reader. */}
+      <fieldset class="rsvp__field rsvp__fieldset">
+        <legend class="rsvp__label">Phone number</legend>
+        <div class="rsvp__phone">
+          <label class="rsvp__sr" for="rsvp-dial">Country code</label>
+          <select
+            class="rsvp__input rsvp__select"
+            id="rsvp-dial"
+            name="dial"
+            aria-describedby="rsvp-phone-error"
+          >
+            {/* `value` is the ISO code and the dial code rides in a data
+                attribute, because dial codes are not unique — +1 is Canada and
+                the United States, +7 is Kazakhstan and Russia. Two <option>s
+                sharing a value make the selection ambiguous to read. The script
+                takes the number from `dataset.dial`, never from the label. */}
+            {
+              pinned.map((c) => (
+                <option value={c.iso} data-dial={c.dial} selected={c.iso === 'IN'}>
+                  {c.name} +{c.dial}
+                </option>
+              ))
+            }
+            <option disabled>──────────</option>
+            {
+              rest.map((c) => (
+                <option value={c.iso} data-dial={c.dial}>
+                  {c.name} +{c.dial}
+                </option>
+              ))
+            }
+          </select>
+
+          <label class="rsvp__sr" for="rsvp-phone">Phone number</label>
+          <input
+            class="rsvp__input"
+            id="rsvp-phone"
+            name="phone"
+            type="tel"
+            inputmode="tel"
+            autocomplete="tel"
+            maxlength="20"
+            aria-describedby="rsvp-phone-hint rsvp-phone-error"
+            required
+          />
+        </div>
+        <p class="rsvp__hint" id="rsvp-phone-hint">
+          Just the number, without the country code.
+        </p>
+        <p class="rsvp__error" id="rsvp-phone-error" role="alert"></p>
+      </fieldset>
+
+      <!-- 3. Email -------------------------------------------------------- -->
+      <div class="rsvp__field">
+        <label class="rsvp__label" for="rsvp-email">
+          Email <span class="rsvp__optional">(optional)</span>
+        </label>
+        <input
+          class="rsvp__input"
+          id="rsvp-email"
+          name="email"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          maxlength="120"
+          aria-describedby="rsvp-email-error"
+        />
+        <p class="rsvp__error" id="rsvp-email-error" role="alert"></p>
+      </div>
+
+      <!-- 4. The two questions -------------------------------------------- -->
+      {/* Radios, not checkboxes, and that is the whole point of asking twice.
+          An unticked checkbox cannot be told apart from "no" — it is both "I am
+          not coming" and "I did not read this". Two radios have three states:
+          yes, no, and nothing chosen, and only the third is allowed to be a
+          validation error. */}
+      <fieldset class="rsvp__field rsvp__fieldset">
+        <legend class="rsvp__label">
+          Will you come to the Wedding Mass at 3:30&nbsp;PM?
+        </legend>
+        <div class="rsvp__choices" aria-describedby="rsvp-mass-error">
+          <label class="rsvp__choice">
+            <input type="radio" name="attending_mass" value="yes" />
+            <span>Yes</span>
+          </label>
+          <label class="rsvp__choice">
+            <input type="radio" name="attending_mass" value="no" />
+            <span>No</span>
+          </label>
+        </div>
+        <p class="rsvp__error" id="rsvp-mass-error" role="alert"></p>
+      </fieldset>
+
+      <fieldset class="rsvp__field rsvp__fieldset">
+        <legend class="rsvp__label">
+          Will you come to the Reception at 6:00&nbsp;PM?
+        </legend>
+        <div class="rsvp__choices" aria-describedby="rsvp-reception-error">
+          <label class="rsvp__choice">
+            <input type="radio" name="attending_reception" value="yes" />
+            <span>Yes</span>
+          </label>
+          <label class="rsvp__choice">
+            <input type="radio" name="attending_reception" value="no" />
+            <span>No</span>
+          </label>
+        </div>
+        <p class="rsvp__error" id="rsvp-reception-error" role="alert"></p>
+      </fieldset>
+
+      <!-- 5. Companions --------------------------------------------------- -->
+      {/* Hidden entirely once both answers are No. The database refuses a
+          decline that brings twenty people with it (see the edge function), and
+          a field that can only produce a rejection should not be on the screen.
+      */}
+      <fieldset class="rsvp__field rsvp__fieldset" id="rsvp-companions-field">
+        <legend class="rsvp__label">Who is coming with you?</legend>
+        <p class="rsvp__hint" id="rsvp-companions-hint">
+          Add everyone you&rsquo;re bringing. You don&rsquo;t need to add yourself.
+        </p>
+        <p class="rsvp__empty" id="rsvp-companions-empty">Just me</p>
+        <div class="rsvp__people" id="rsvp-people"></div>
+        <button class="rsvp__add" id="rsvp-add" type="button">
+          Add another person
+        </button>
+      </fieldset>
+
+      {/* Cloned by the script for each row. Inert in the document: a <template>
+          holds an inactive document fragment, so nothing inside it is a form
+          control, is focusable, or is submitted. */}
+      <template id="rsvp-person-template">
+        <div class="rsvp__person">
+          <div class="rsvp__field rsvp__person-name">
+            <label class="rsvp__label rsvp__label--small" data-person-label>Name</label>
+            <input class="rsvp__input" type="text" maxlength="80" data-person-name />
+            <p class="rsvp__error" role="alert" data-person-error></p>
+          </div>
+
+          <div class="rsvp__person-age">
+            <span class="rsvp__label rsvp__label--small">Age</span>
+            <div class="rsvp__choices rsvp__choices--tight">
+              <label class="rsvp__choice">
+                <input type="radio" value="adult" checked data-person-type />
+                <span>Adult</span>
+              </label>
+              <label class="rsvp__choice">
+                <input type="radio" value="child" data-person-type />
+                <span>Child (under 12)</span>
+              </label>
+            </div>
+          </div>
+
+          <button class="rsvp__remove" type="button" data-person-remove>
+            Remove
+          </button>
+        </div>
+      </template>
+
+      <!-- 6. Message ------------------------------------------------------ -->
+      <div class="rsvp__field">
+        <label class="rsvp__label" for="rsvp-message">
+          Anything you&rsquo;d like to tell us? <span class="rsvp__optional">(optional)</span>
+        </label>
+        <textarea
+          class="rsvp__input rsvp__textarea"
+          id="rsvp-message"
+          name="message"
+          rows="4"
+          maxlength="1000"
+          aria-describedby="rsvp-message-count"></textarea>
+        {/* Empty and silent until the last 200 characters. A counter that is
+            always there is a limit announced to everyone who was never going to
+            reach it. `aria-live="polite"` so it is not read on every keystroke. */}
+        <p class="rsvp__count" id="rsvp-message-count" aria-live="polite"></p>
+      </div>
+
+      <!-- 7. Honeypot ----------------------------------------------------- -->
+      {/* Off-screen by position, never `display: none`. A hidden field is the
+          first thing a form-filling bot checks for, and skipping it is one
+          line; a field that is in the layout and simply not where the eye is
+          gets filled in. Out of the tab order and out of the accessibility
+          tree, so no human ever meets it either way. The edge function answers
+          a filled honeypot with a plausible success — a bot that gets a 400
+          learns it was caught. */}
+      <div class="rsvp__honeypot" aria-hidden="true">
+        <label for="rsvp-website">Website</label>
+        <input
+          id="rsvp-website"
+          name="website"
+          type="text"
+          tabindex="-1"
+          autocomplete="off"
+        />
+      </div>
+
+      <!-- 8. Turnstile ---------------------------------------------------- -->
+      <div class="rsvp__turnstile" id="rsvp-turnstile"></div>
+
+      <p class="rsvp__error rsvp__error--form" id="rsvp-form-error" role="alert"></p>
+
+      <button class="rsvp__submit" id="rsvp-submit" type="submit">
+        Send our answer
+      </button>
+    </form>
+
+    <!-- The success panel, built server-side and filled in by the script. -->
+    <div class="rsvp__done" id="rsvp-done" hidden>
+      <p class="rsvp__done-line" id="rsvp-done-line"></p>
+      <dl class="rsvp__summary" id="rsvp-summary"></dl>
+      <a
+        class="rsvp__wa"
+        id="rsvp-wa"
+        href={`https://wa.me/${primary.phone.replace(/\D/g, '')}`}
+        data-phone={primary.phone.replace(/\D/g, '')}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Message {primary.name} on WhatsApp
+      </a>
+    </div>
+  </div>
+</section>
+
+<script>
+  /**
+   * Bundled rather than `is:inline`, so this can be written to be read and
+   * still ship small — Vite minifies it and Astro emits it as a deferred
+   * module. Anything `is:inline` ships byte for byte, comments included, and
+   * this file has too much in it for that to be free.
+   *
+   * PUBLIC_* values are substituted at build; nothing is fetched to discover
+   * them and nothing here is a secret. See .env.example.
+   */
+  const FUNCTION_URL = `${import.meta.env.PUBLIC_SUPABASE_URL}/functions/v1/rsvp`;
+  const ANON_KEY = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+  const SITE_KEY = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+
+  const MAX_PEOPLE = 20; // matches rsvps_companions_max_20
+  const MESSAGE_MAX = 1000;
+  const COUNTER_FROM = 800;
+
+  /* The four the function can return, in the words a guest should read. Keyed
+     by the function's own codes so the two lists can be diffed by eye. */
+  const MESSAGES: Record<string, string> = {
+    captcha_failed: 'That check didn’t go through. Please try again.',
+    validation_failed:
+      'Something in the form isn’t quite right — please check the highlighted fields.',
+    rate_limited:
+      'We’ve already got your answer. If you need to change it, please call one of our brothers.',
+    server_error:
+      'Something went wrong on our side. Please try again, or send us a WhatsApp.',
+  };
+
+  const form = document.getElementById('rsvp-form') as HTMLFormElement | null;
+  const section = document.getElementById('rsvp');
+  if (form && section) init(form, section);
+
+  function init(form: HTMLFormElement, section: HTMLElement) {
+    /* First, before anything can throw: this is what swaps the WhatsApp
+       fallback for the form, so it must only ever be set on a page where this
+       script is genuinely running. */
+    document.documentElement.classList.add('rsvp-js');
+
+    const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+    const first = $<HTMLInputElement>('rsvp-first');
+    const last = $<HTMLInputElement>('rsvp-last');
+    const dial = $<HTMLSelectElement>('rsvp-dial');
+    const phone = $<HTMLInputElement>('rsvp-phone');
+    const email = $<HTMLInputElement>('rsvp-email');
+    const message = $<HTMLTextAreaElement>('rsvp-message');
+    const honeypot = $<HTMLInputElement>('rsvp-website');
+    const people = $<HTMLDivElement>('rsvp-people');
+    const empty = $<HTMLParagraphElement>('rsvp-companions-empty');
+    const addButton = $<HTMLButtonElement>('rsvp-add');
+    const companionsField = $<HTMLFieldSetElement>('rsvp-companions-field');
+    const template = $<HTMLTemplateElement>('rsvp-person-template');
+    const counter = $<HTMLParagraphElement>('rsvp-message-count');
+    const submit = $<HTMLButtonElement>('rsvp-submit');
+    const formError = $<HTMLParagraphElement>('rsvp-form-error');
+    const done = $<HTMLDivElement>('rsvp-done');
+
+    let sent = false;
+    let widgetId: string | undefined;
+
+    /* ---------------------------------------------------------------------
+       Errors
+       --------------------------------------------------------------------- */
+    /* `aria-describedby` is wired in the markup and stays wired: the <p> is
+       always there and is empty when there is nothing to say, which screen
+       readers skip. Only `aria-invalid` moves, and only on the control. */
+    function setError(control: HTMLElement | null, id: string, text: string) {
+      const box = document.getElementById(id);
+      if (box) box.textContent = text;
+      if (control) {
+        if (text) control.setAttribute('aria-invalid', 'true');
+        else control.removeAttribute('aria-invalid');
+      }
+    }
+
+    function clearError(control: HTMLElement | null, id: string) {
+      setError(control, id, '');
+    }
+
+    /* ---------------------------------------------------------------------
+       Field rules. Each returns an error string, or '' when the field is fine.
+       --------------------------------------------------------------------- */
+    const trim = (v: string) => v.replace(/\s+/g, ' ').trim();
+
+    function checkName(input: HTMLInputElement, what: string) {
+      const v = trim(input.value);
+      if (!v) return `Please enter your ${what}.`;
+      if (v.length > 80) return `That ${what} is too long.`;
+      return '';
+    }
+
+    /** To E.164: the selected country's code, then the digits typed. */
+    function e164() {
+      const code = dial.selectedOptions[0]?.dataset.dial ?? '';
+      /* A trunk prefix is a domestic-dialling artefact — 06282… inside India,
+         079… inside Switzerland — and it is never part of the international
+         form. Dropped rather than rejected: typing the number the way you dial
+         it at home is not a mistake a guest should be corrected for. */
+      const local = phone.value.replace(/\D/g, '').replace(/^0+/, '');
+      return `+${code}${local}`;
+    }
+
+    function checkPhone() {
+      if (!phone.value.replace(/\D/g, '')) return 'Please enter your phone number.';
+      if (!/^\+[1-9][0-9]{7,14}$/.test(e164())) {
+        return 'That doesn’t look like a complete phone number.';
+      }
+      return '';
+    }
+
+    function checkEmail() {
+      const v = trim(email.value);
+      if (!v) return ''; // optional
+      return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? '' : 'Please check this email address.';
+    }
+
+    const answer = (name: string) => {
+      const picked = form.querySelector<HTMLInputElement>(
+        `input[name="${name}"]:checked`,
+      );
+      return picked ? picked.value === 'yes' : null;
+    };
+
+    /* ---------------------------------------------------------------------
+       Companions
+       --------------------------------------------------------------------- */
+    function rows() {
+      return Array.from(people.querySelectorAll<HTMLElement>('.rsvp__person'));
+    }
+
+    function syncPeople() {
+      const n = rows().length;
+      empty.hidden = n > 0;
+      addButton.hidden = n >= MAX_PEOPLE;
+      /* Each row's radio pair needs a name of its own, or every row on the form
+         becomes one group and picking "Child" anywhere unpicks it everywhere.
+         Re-stamped on every change because removing row 2 renumbers row 3. */
+      rows().forEach((row, i) => {
+        row.querySelectorAll<HTMLInputElement>('[data-person-type]').forEach((r) => {
+          r.name = `person-${i}`;
+        });
+
+        const input = row.querySelector<HTMLInputElement>('[data-person-name]')!;
+        const label = row.querySelector<HTMLLabelElement>('[data-person-label]')!;
+        const error = row.querySelector<HTMLElement>('[data-person-error]')!;
+        const id = `rsvp-person-${i}`;
+
+        input.id = id;
+        input.setAttribute('aria-describedby', `${id}-error`);
+        label.htmlFor = id;
+        /* Numbered rather than "Name", so a guest adding six people is told
+           which box they are in and a screen reader reading the form linearly
+           does not meet six identical labels. */
+        label.textContent = `Person ${i + 1}`;
+        error.id = `${id}-error`;
+        row
+          .querySelector('[data-person-remove]')!
+          .setAttribute('aria-label', `Remove person ${i + 1}`);
+      });
+    }
+
+    function addPerson() {
+      if (rows().length >= MAX_PEOPLE) return;
+      const row = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      people.appendChild(row);
+      syncPeople();
+      row.querySelector<HTMLInputElement>('[data-person-name]')!.focus();
+    }
+
+    addButton.addEventListener('click', addPerson);
+
+    people.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest('[data-person-remove]');
+      if (!button) return;
+      const row = button.closest('.rsvp__person')!;
+      const neighbour = row.nextElementSibling ?? row.previousElementSibling;
+      row.remove();
+      syncPeople();
+      /* Focus was on the button that has just been removed from the document,
+         which drops it to <body> and loses a keyboard user their place on a
+         long form. Somewhere deliberate instead: the next row if there is one,
+         otherwise the button that would add a new one. */
+      const landing = neighbour?.querySelector<HTMLElement>('[data-person-name]');
+      if (landing) landing.focus();
+      else addButton.focus();
+    });
+
+    /* `blur` does not bubble, `focusout` does — which is what lets one listener
+       cover rows that did not exist when it was attached. */
+    people.addEventListener('focusout', (event) => {
+      const input = event.target as HTMLInputElement;
+      if (!input.matches?.('[data-person-name]')) return;
+      const error = input.parentElement!.querySelector<HTMLElement>('[data-person-error]')!;
+      const bad = !trim(input.value);
+      error.textContent = bad ? 'Please enter a name, or remove this row.' : '';
+      input.setAttribute('aria-invalid', String(bad));
+    });
+
+    function companions() {
+      return rows().map((row) => ({
+        name: trim(row.querySelector<HTMLInputElement>('[data-person-name]')!.value),
+        type: row.querySelector<HTMLInputElement>('[data-person-type]:checked')?.value === 'child'
+          ? 'child'
+          : 'adult',
+      }));
+    }
+
+    /* Both answers No means the guest list is not just unnecessary, it is
+       rejected by the function. Hide it and forget whatever was typed. */
+    function syncDeclined() {
+      const declined = answer('attending_mass') === false &&
+        answer('attending_reception') === false;
+      companionsField.hidden = declined;
+      if (declined) {
+        people.replaceChildren();
+        syncPeople();
+      }
+    }
+
+    form.addEventListener('change', (event) => {
+      const t = event.target as HTMLInputElement;
+      if (t.name === 'attending_mass' || t.name === 'attending_reception') {
+        syncDeclined();
+        clearError(null, `rsvp-${t.name === 'attending_mass' ? 'mass' : 'reception'}-error`);
+      }
+    });
+
+    /* ---------------------------------------------------------------------
+       Message counter — silent until there is something worth saying.
+       --------------------------------------------------------------------- */
+    message.addEventListener('input', () => {
+      const used = message.value.length;
+      counter.textContent =
+        used >= COUNTER_FROM ? `${MESSAGE_MAX - used} characters left` : '';
+    });
+
+    /* ---------------------------------------------------------------------
+       Validation, on blur and on submit. Never on input: correcting somebody
+       mid-word, before they have finished typing the thing you are complaining
+       about, is the single most disliked behaviour a form has.
+       --------------------------------------------------------------------- */
+    const onBlur = (el: HTMLElement, run: () => string, id: string) =>
+      el.addEventListener('blur', () => setError(el, id, run()));
+
+    onBlur(first, () => checkName(first, 'first name'), 'rsvp-first-error');
+    onBlur(last, () => checkName(last, 'last name'), 'rsvp-last-error');
+    onBlur(phone, checkPhone, 'rsvp-phone-error');
+    onBlur(email, checkEmail, 'rsvp-email-error');
+
+    /** Returns the first control that failed, or null when everything passed. */
+    function validate(): HTMLElement | null {
+      const checks: [HTMLElement, string, string][] = [
+        [first, 'rsvp-first-error', checkName(first, 'first name')],
+        [last, 'rsvp-last-error', checkName(last, 'last name')],
+        [phone, 'rsvp-phone-error', checkPhone()],
+        [email, 'rsvp-email-error', checkEmail()],
+      ];
+
+      for (const [el, id, text] of checks) setError(el, id, text);
+
+      const questions: [string, string, string][] = [
+        ['attending_mass', 'rsvp-mass-error', 'Please answer yes or no.'],
+        ['attending_reception', 'rsvp-reception-error', 'Please answer yes or no.'],
+      ];
+
+      for (const [name, id, text] of questions) {
+        const missing = answer(name) === null;
+        setError(null, id, missing ? text : '');
+        const radio = form.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+        radio.setAttribute('aria-invalid', String(missing));
+        if (missing) checks.push([radio, id, text]);
+      }
+
+      /* Every empty row is marked, not just the first — a guest who added
+         three and filled in one should be shown all three, not sent round the
+         loop twice. Only the first is pushed onto `checks`, because only one
+         of them can be focused. */
+      let firstEmptyRow = true;
+      for (const row of rows()) {
+        const input = row.querySelector<HTMLInputElement>('[data-person-name]')!;
+        const error = row.querySelector<HTMLElement>('[data-person-error]')!;
+        const bad = !trim(input.value);
+        input.setAttribute('aria-invalid', String(bad));
+        error.textContent = bad ? 'Please enter a name, or remove this row.' : '';
+        if (bad && firstEmptyRow) {
+          firstEmptyRow = false;
+          checks.push([input, error.id, error.textContent]);
+        }
+      }
+
+      const failed = checks.find(([, , text]) => text);
+      return failed ? failed[0] : null;
+    }
+
+    /* ---------------------------------------------------------------------
+       Turnstile — script injected on first sight of the section, widget
+       rendered explicitly once it lands.
+       --------------------------------------------------------------------- */
+    let turnstileRequested = false;
+
+    function loadTurnstile() {
+      if (turnstileRequested || !SITE_KEY) return;
+      turnstileRequested = true;
+
+      (window as any).__rsvpTurnstileReady = () => {
+        widgetId = (window as any).turnstile?.render('#rsvp-turnstile', {
+          sitekey: SITE_KEY,
+          theme: 'light',
+        });
+      };
+      const s = document.createElement('script');
+      s.src =
+        'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__rsvpTurnstileReady';
+      s.defer = true;
+      document.head.appendChild(s);
+    }
+
+    /* Four independent ways this gets loaded, and the reason there are four is
+       a failure that actually happened rather than one that might: an
+       IntersectionObserver observing this very section, with the section
+       squarely inside the viewport, delivered nothing at all — the same
+       never-composites case documented at length around the reveal observer in
+       index.astro. There it costs an animation. Here it would cost the widget,
+       and with no widget there is no token, and with no token the form can
+       never be sent — reporting "that check didn't go through", which sends the
+       guest hunting for a mistake they did not make.
+
+       So the observer is the optimisation, not the mechanism. The mechanism is
+       the third one: if a guest so much as puts the cursor in a field, the
+       widget is loaded. That cannot be starved by anything, and it still costs
+       a visitor who never reaches this section precisely nothing — which is the
+       whole point of not loading it up front. */
+
+    /* 1. Already here — the page was opened at #rsvp, or restored mid-scroll.
+          Read from geometry rather than waiting to be told. */
+    const box = section.getBoundingClientRect();
+    if (box.top < window.innerHeight * 1.5 && box.bottom > 0) loadTurnstile();
+
+    /* 2. Approaching. Half a screen of warning, so on a normal visit the widget
+          is solved and waiting before anyone has finished typing their name. */
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return;
+          io.disconnect();
+          loadTurnstile();
+        },
+        { rootMargin: '50% 0px' },
+      );
+      io.observe(section);
+    } else {
+      /* 3a. No observer at all: there is nothing to be clever with. */
+      loadTurnstile();
+    }
+
+    /* 3b. The floor. Touching the form is unambiguous intent to send it, and
+           this fires whatever the observer did or did not do. `focusin`
+           bubbles where `focus` does not, so one listener covers every control
+           including the rows that do not exist yet. */
+    form.addEventListener('focusin', loadTurnstile, { once: true });
+    form.addEventListener('pointerdown', loadTurnstile, { once: true });
+
+    /* ---------------------------------------------------------------------
+       Submit
+       --------------------------------------------------------------------- */
+    function resetWidget() {
+      /* Turnstile tokens are single-use. Without this, the first failure makes
+         every retry fail too — with `captcha_failed`, which sends the guest
+         looking for a problem in a field. */
+      try {
+        (window as any).turnstile?.reset(widgetId);
+      } catch {
+        /* Nothing to reset; the submit path below reports it. */
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (sent || submit.disabled) return;
+
+      formError.textContent = '';
+
+      const invalid = validate();
+      if (invalid) {
+        invalid.focus();
+        formError.textContent = MESSAGES.validation_failed;
+        return;
+      }
+
+      /* Two different failures wearing one face. If Turnstile is loaded and
+         simply has no token, the check is retryable and saying so is right. If
+         the script never arrived — a network filter, a corporate proxy, an
+         offline moment during the fetch — there is nothing for the guest to
+         retry and telling them to try again is a loop. Send them to WhatsApp
+         instead, which is the one route that always works. */
+      const loaded = typeof (window as any).turnstile !== 'undefined';
+      let token = '';
+      try {
+        token = (window as any).turnstile?.getResponse(widgetId) ?? '';
+      } catch {
+        token = '';
+      }
+      if (!token) {
+        formError.textContent = loaded ? MESSAGES.captcha_failed : MESSAGES.server_error;
+        resetWidget();
+        return;
+      }
+
+      submit.disabled = true;
+      submit.textContent = 'Sending…';
+
+      const payload = {
+        first_name: trim(first.value),
+        last_name: trim(last.value),
+        phone: e164(),
+        email: trim(email.value) || null,
+        attending_mass: answer('attending_mass'),
+        attending_reception: answer('attending_reception'),
+        companions: companionsField.hidden ? [] : companions(),
+        message: trim(message.value) || null,
+        website: honeypot.value,
+        turnstile_token: token,
+      };
+
+      try {
+        const response = await fetch(FUNCTION_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            /* The gateway wants a JWT before the function is reached
+               (`verify_jwt` is on). The anon key is that JWT, it is public by
+               design, and it grants nothing on `public.rsvps`. */
+            Authorization: `Bearer ${ANON_KEY}`,
+            apikey: ANON_KEY,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (response.ok && result.ok) {
+          sent = true;
+          showDone(payload);
+          return;
+        }
+
+        formError.textContent = MESSAGES[result.error] ?? MESSAGES.server_error;
+      } catch {
+        /* A network failure, an offline phone, a blocked request. */
+        formError.textContent = MESSAGES.server_error;
+      }
+
+      resetWidget();
+      submit.disabled = false;
+      submit.textContent = 'Send our answer';
+    });
+
+    /* ---------------------------------------------------------------------
+       Success. In place, never a navigation: the answer has been accepted and
+       a page load is one more thing that can go wrong after the fact.
+       --------------------------------------------------------------------- */
+    function showDone(payload: any) {
+      const coming = payload.attending_mass || payload.attending_reception;
+
+      $('rsvp-done-line').textContent = coming
+        ? 'Thank you — we can’t wait to see you.'
+        : 'Thank you for letting us know — we’ll miss you.';
+
+      const yesNo = (v: boolean) => (v ? 'Yes' : 'No');
+      const items: [string, string][] = [
+        ['Name', `${payload.first_name} ${payload.last_name}`],
+        ['Phone', payload.phone],
+      ];
+      if (payload.email) items.push(['Email', payload.email]);
+      items.push(['Wedding Mass', yesNo(payload.attending_mass)]);
+      items.push(['Reception', yesNo(payload.attending_reception)]);
+      if (payload.companions.length) {
+        items.push([
+          'Coming with you',
+          payload.companions
+            .map((c: any) => (c.type === 'child' ? `${c.name} (child)` : c.name))
+            .join(', '),
+        ]);
+      }
+      if (payload.message) items.push(['Your message', payload.message]);
+
+      const summary = $('rsvp-summary');
+      summary.replaceChildren(
+        /* textContent throughout — every value here is something a guest typed
+           and none of it is markup. */
+        ...items.flatMap(([term, value]) => {
+          const dt = document.createElement('dt');
+          dt.textContent = term;
+          const dd = document.createElement('dd');
+          dd.textContent = value;
+          return [dt, dd];
+        }),
+      );
+
+      const wa = $<HTMLAnchorElement>('rsvp-wa');
+      wa.href = `https://wa.me/${wa.dataset.phone}?text=${encodeURIComponent(
+        `Hello, I've just sent our answer for the wedding. My name is ${payload.first_name}.`,
+      )}`;
+
+      form.hidden = true;
+      done.hidden = false;
+      /* The panel replaced the thing that had focus, so focus has to be given
+         somewhere deliberate or it falls to <body>. */
+      done.setAttribute('tabindex', '-1');
+      done.focus();
+    }
+
+    syncPeople();
+  }
+</script>
+
+<style>
+  .rsvp {
+    background-color: var(--color-shell);
+  }
+
+  .rsvp__inner {
+    max-width: 42rem;
+    margin-inline: auto;
+    padding: clamp(3.5rem, 8vw, 6.5rem) clamp(1.25rem, 6vw, 3rem);
+  }
+
+  .rsvp__eyebrow {
+    font-size: 0.7rem;
+    line-height: 1.6;
+    letter-spacing: 0.28em;
+    text-indent: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .rsvp__title {
+    margin-top: clamp(0.75rem, 1.6vw, 1.1rem);
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.25rem, 5.5vw, 3.5rem);
+    line-height: 1.05;
+    color: var(--color-ink);
+  }
+
+  .rsvp__intro {
+    max-width: 46ch;
+    margin-top: clamp(0.9rem, 2vw, 1.25rem);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+
+  /* -- the two states -------------------------------------------------------
+     `.rsvp-js` is set by this section's own script, and only by it. Never
+     `.js`: that class is removed 2.5s after load by the reveal system's dead
+     man's switch, which would take the form down with it.
+  ------------------------------------------------------------------------- */
+  .rsvp__form {
+    display: none;
+  }
+
+  /* `:not([hidden])` is load-bearing rather than tidy. The success panel hides
+     the form with `form.hidden = true`, and `[hidden]`'s `display: none` lives
+     in the user-agent sheet — this rule would simply outrank it and leave the
+     form on the screen underneath the thank-you. */
+  :global(.rsvp-js) .rsvp__form:not([hidden]) {
+    display: block;
+  }
+
+  :global(.rsvp-js) .rsvp__nojs {
+    display: none;
+  }
+
+  .rsvp__nojs {
+    margin-top: clamp(2rem, 4vw, 2.75rem);
+  }
+
+  .rsvp__nojs-lead {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+
+  .rsvp__nojs-list {
+    display: grid;
+    gap: 0.6rem;
+    margin: 1.25rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .rsvp__nojs-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 52px;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    color: var(--color-ink);
+    font-size: 1rem;
+    text-decoration: none;
+  }
+
+  .rsvp__nojs-link:hover,
+  .rsvp__nojs-link:focus-visible {
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+  }
+
+  .rsvp__nojs-number {
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.75;
+  }
+
+  /* -- fields -------------------------------------------------------------- */
+
+  .rsvp__form {
+    margin-top: clamp(2rem, 4.5vw, 3rem);
+  }
+
+  .rsvp__field {
+    margin-top: clamp(1.5rem, 3vw, 2rem);
+  }
+
+  .rsvp__form > .rsvp__row:first-child,
+  .rsvp__form > .rsvp__field:first-child {
+    margin-top: 0;
+  }
+
+  /* A <fieldset> carries browser defaults that fight every layout it is in. */
+  .rsvp__fieldset {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .rsvp__label {
+    display: block;
+    /* 1rem is the floor for a label on this page, and this audience is the
+       reason. Never smaller, whatever the layout wants. */
+    padding: 0;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--color-ink);
+  }
+
+  .rsvp__label--small {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--color-muted);
+  }
+
+  .rsvp__optional {
+    font-weight: 400;
+    color: var(--color-muted);
+  }
+
+  .rsvp__hint {
+    margin-top: 0.3rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--color-muted);
+  }
+
+  .rsvp__input {
+    display: block;
+    width: 100%;
+    min-height: 52px;
+    margin-top: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid rgb(var(--ink-rgb) / 0.25);
+    border-radius: 4px;
+    background-color: var(--color-shell);
+    color: var(--color-ink);
+    font-family: inherit;
+    /* Never below 16px. Anything smaller and iOS Safari zooms the page on
+       focus, which on a form this long leaves the guest scrolled sideways
+       inside a field they cannot see the end of. */
+    font-size: 1.0625rem;
+    line-height: 1.5;
+  }
+
+  .rsvp__input:focus-visible {
+    border-color: var(--color-ochre);
+  }
+
+  .rsvp__input[aria-invalid='true'] {
+    border-color: var(--color-brick);
+  }
+
+  .rsvp__select {
+    /* The native control, deliberately. On a phone it opens the platform's own
+       wheel or list, which is searchable by typing and is the one long-list UI
+       every guest already knows. */
+    appearance: none;
+    padding-right: 2.25rem;
+    background-image: linear-gradient(45deg, transparent 50%, var(--color-muted) 50%),
+      linear-gradient(135deg, var(--color-muted) 50%, transparent 50%);
+    background-position: right 1.1rem top 55%, right 0.75rem top 55%;
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+  }
+
+  .rsvp__textarea {
+    min-height: 7rem;
+    resize: vertical;
+  }
+
+  .rsvp__count {
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--color-muted);
+    /* Reserved whether or not there is a number in it, so the button below
+       does not jump when the counter appears at 800 characters. */
+    min-height: 1.275rem;
+  }
+
+  /* Two columns only when there is room for two comfortable ones. */
+  .rsvp__row--pair {
+    display: grid;
+    gap: clamp(1.5rem, 3vw, 2rem);
+  }
+
+  @media (min-width: 560px) {
+    .rsvp__row--pair {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .rsvp__phone {
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  @media (min-width: 560px) {
+    .rsvp__phone {
+      /* The select is sized to hold the longest country name comfortably; the
+         number takes the rest. */
+      grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+
+  /* -- yes / no, adult / child --------------------------------------------- */
+
+  .rsvp__choices {
+    display: grid;
+    gap: 0.6rem;
+    margin-top: 0.7rem;
+  }
+
+  @media (min-width: 460px) {
+    .rsvp__choices {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .rsvp__choices--tight {
+      grid-template-columns: repeat(2, minmax(0, max-content));
+    }
+  }
+
+  /* The whole box is the target, not the 20px dot inside it. */
+  .rsvp__choice {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 52px;
+    padding: 0.5rem 1.1rem;
+    border: 1px solid rgb(var(--ink-rgb) / 0.25);
+    border-radius: 999px;
+    font-size: 1.0625rem;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+
+  .rsvp__choice input {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    accent-color: var(--color-ink);
+  }
+
+  .rsvp__choice:has(input:checked) {
+    border-color: var(--color-ink);
+    background-color: rgb(var(--ink-rgb) / 0.05);
+  }
+
+  /* -- companions ----------------------------------------------------------- */
+
+  .rsvp__empty {
+    margin-top: 0.8rem;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+
+  .rsvp__person {
+    display: grid;
+    gap: 0.9rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid rgb(var(--ink-rgb) / 0.12);
+    border-radius: 4px;
+  }
+
+  .rsvp__person-name .rsvp__input {
+    margin-top: 0.35rem;
+  }
+
+  .rsvp__add,
+  .rsvp__remove {
+    min-height: 52px;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    background: none;
+    color: var(--color-ink);
+    font-family: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .rsvp__add {
+    margin-top: 1rem;
+  }
+
+  .rsvp__remove {
+    justify-self: start;
+    min-height: 48px;
+    border-color: rgb(var(--ink-rgb) / 0.3);
+    font-size: 0.95rem;
+    color: var(--color-muted);
+  }
+
+  .rsvp__add:hover,
+  .rsvp__add:focus-visible,
+  .rsvp__remove:hover,
+  .rsvp__remove:focus-visible {
+    background-color: var(--color-ink);
+    border-color: var(--color-ink);
+    color: var(--color-shell);
+  }
+
+  /* -- honeypot -------------------------------------------------------------
+     Positioned off-screen, never `display: none` and never `visibility:
+     hidden`. Both are trivially detected by a bot, which then skips the field
+     and passes the check; a field that is simply somewhere nobody looks gets
+     filled in. `tabindex="-1"` and `aria-hidden` keep every human out of it.
+  ------------------------------------------------------------------------- */
+  .rsvp__honeypot {
+    position: absolute;
+    left: -9999px;
+    top: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  /* -- turnstile, errors, submit -------------------------------------------- */
+
+  .rsvp__turnstile {
+    /* Reserves the widget's 65px so the button does not jump down when the
+       iframe lands. Empty until then, and empty forever if the script is
+       blocked. */
+    min-height: 65px;
+    margin-top: clamp(1.5rem, 3vw, 2rem);
+  }
+
+  .rsvp__error {
+    margin-top: 0.4rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--color-brick);
+  }
+
+  .rsvp__error:empty {
+    margin-top: 0;
+  }
+
+  .rsvp__error--form {
+    margin-top: 1rem;
+    font-size: 1rem;
+  }
+
+  .rsvp__submit {
+    display: block;
+    width: 100%;
+    min-height: 56px;
+    margin-top: 1.25rem;
+    padding: 0.75rem 2rem;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+    font-family: inherit;
+    font-size: 1.0625rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .rsvp__submit:hover:not(:disabled),
+  .rsvp__submit:focus-visible:not(:disabled) {
+    background-color: transparent;
+    color: var(--color-ink);
+  }
+
+  .rsvp__submit:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  @media (min-width: 560px) {
+    .rsvp__submit {
+      width: auto;
+      min-width: 16rem;
+    }
+  }
+
+  /* -- success --------------------------------------------------------------- */
+
+  .rsvp__done {
+    margin-top: clamp(2rem, 4.5vw, 3rem);
+  }
+
+  .rsvp__done:focus {
+    outline: none;
+  }
+
+  .rsvp__done-line {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+    line-height: 1.15;
+    color: var(--color-ink);
+  }
+
+  .rsvp__summary {
+    display: grid;
+    gap: 0.4rem 1.25rem;
+    margin: clamp(1.5rem, 3vw, 2rem) 0 0;
+    padding-top: clamp(1.25rem, 2.5vw, 1.75rem);
+    border-top: 1px solid rgb(var(--ink-rgb) / 0.12);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  @media (min-width: 480px) {
+    .rsvp__summary {
+      grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+    }
+  }
+
+  .rsvp__summary dt {
+    color: var(--color-muted);
+  }
+
+  .rsvp__summary dd {
+    margin: 0;
+    color: var(--color-ink);
+    overflow-wrap: anywhere;
+  }
+
+  .rsvp__wa {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    margin-top: clamp(1.5rem, 3vw, 2rem);
+    padding: 0.5rem 1.5rem;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    color: var(--color-ink);
+    font-size: 1rem;
+    text-decoration: none;
+  }
+
+  .rsvp__wa:hover,
+  .rsvp__wa:focus-visible {
+    background-color: var(--color-ink);
+    color: var(--color-shell);
+  }
+
+  /* Visible to a screen reader, not to the eye. The two phone controls each
+     need their own name; the group's <legend> is what is on the screen. */
+  .rsvp__sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rsvp__submit {
+      transition: none;
+    }
+  }
+</style>

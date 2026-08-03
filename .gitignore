@@ -12,9 +12,26 @@ yarn-error.log*
 pnpm-debug.log*
 
 # environment variables
+#
+# These three lines are advice, not enforcement: `git add -f .env` overrides
+# every one of them silently. The control that actually refuses is
+# .githooks/pre-commit, which rejects any staged .env file (however it got
+# staged) and any staged line carrying `sb_secret_` or `service_role`. It is
+# wired up by `npm install`; `git config --get core.hooksPath` should say
+# `.githooks`.
+#
+# No leading slash, so these match at any depth rather than only at the root.
 .env
 .env.*
 !.env.example
+
+# Supabase CLI scratch state. Machine-local, and `pooler-url` is a Postgres
+# connection string — not something to publish alongside the guest list.
+supabase/.temp/
+
+# Local MCP server config. Points at this machine's tooling, carries no value
+# for anyone cloning the repo, and is exactly the file a token ends up in.
+.mcp.json
 
 # macOS / Windows cruft
 .DS_Store

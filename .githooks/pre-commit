@@ -1,0 +1,112 @@
+#!/bin/sh
+#
+# Refuses to commit a secret.
+#
+# .gitignore is advice, not a control: `git add -f .env` overrides it without
+# complaint, and the file is then one `git commit` from being in a public
+# repository's history forever — where deleting it in a later commit does not
+# remove it. This hook is the part that actually says no.
+#
+# Two rules, deliberately narrow. A hook that cries wolf gets bypassed with
+# --no-verify, and a bypassed hook protects nothing:
+#
+#   1. Any staged env file. `.env`, `.env.local`, `.env.production` — anything
+#      matching `.env*`, in any directory, EXCEPT `.env.example`, which is the
+#      committed template and carries no values.
+#
+#   2. Any staged line carrying secret MATERIAL — the key pasted somewhere
+#      other than a .env file: into a script, a note, an Astro component.
+#      Only ADDED lines are scanned, so existing history never re-triggers it.
+#
+#      This deliberately matches the key rather than the word. A rule that
+#      rejected every line containing the bare strings was tried first and
+#      rejected this file, .gitignore and .env.example — the three files whose
+#      entire job is to name what they defend against. A guard that blocks its
+#      own documentation is one that gets switched off within the week, so the
+#      patterns below require an actual value:
+#
+#        the sb-secret prefix followed by key characters — a real Supabase
+#          secret key, rather than a backticked mention of the prefix;
+#        a service-role env name assigned something — note the assignment must
+#          have a value after it, so the blank template line in .env.example
+#          passes while a filled-in one does not;
+#        the service-role name appearing as a quoted value, which is how it
+#          turns up in a decoded JWT payload or a pasted config blob.
+#
+#      The patterns are written out in the code below rather than spelled here,
+#      because a comment that quotes them verbatim is itself a staged line
+#      containing a key-shaped string — this file failed its own rule twice
+#      while being written. If you edit the prose above, do not paste the
+#      literal forms into it.
+#
+#      Verified both directions against this repo: prose discussing these
+#      strings passes, a line holding a key does not.
+#
+# Wired up by `npm install` (see the `prepare` script in package.json), which
+# sets `core.hooksPath` to this directory. Verify with:
+#
+#     git config --get core.hooksPath      # -> .githooks
+#
+# Deliberately NOT bypassable by configuration. If you genuinely need to commit
+# something this rejects, you have to pass --no-verify by hand and think about
+# it first, which is the whole point.
+
+fail() {
+  printf '\n\033[31mpre-commit: refusing to commit — %s\033[0m\n' "$1" >&2
+}
+
+status=0
+
+# --- 1. staged env files -----------------------------------------------------
+# --diff-filter=d ignores deletions: removing a .env that was committed by
+# mistake is exactly the commit this must not block.
+env_files=$(
+  git diff --cached --name-only --diff-filter=d |
+    grep -E '(^|/)\.env($|\.)' |
+    grep -v -E '(^|/)\.env\.example$'
+)
+
+if [ -n "$env_files" ]; then
+  fail "an environment file is staged"
+  printf '%s\n' "$env_files" | sed 's/^/    /' >&2
+  cat >&2 <<'EOF'
+
+    These hold local secrets and must never enter git history. Unstage with:
+
+        git restore --staged <file>
+
+    .env.example is the committed template — put placeholders there instead.
+EOF
+  status=1
+fi
+
+# --- 2. staged secret material ----------------------------------------------
+# `-U0` keeps the diff to changed lines with no context, so an unchanged line
+# sitting near an edit cannot trip this. The leading '+' filter drops the
+# +++ file header.
+added_lines=$(
+  git diff --cached -U0 --diff-filter=d |
+    grep -E '^\+' |
+    grep -v '^+++'
+)
+
+secret_hits=$(
+  printf '%s\n' "$added_lines" | grep -E 'sb_secret_[A-Za-z0-9_-]{8,}'
+  printf '%s\n' "$added_lines" | grep -iE '[A-Za-z_]*service_role[A-Za-z_]*[[:space:]]*=[[:space:]]*[^[:space:]]'
+  printf '%s\n' "$added_lines" | grep -E '["'"'"']service_role["'"'"']'
+)
+secret_hits=$(printf '%s' "$secret_hits" | grep -v '^$')
+
+if [ -n "$secret_hits" ]; then
+  fail "a staged line looks like a Supabase secret"
+  printf '%s\n' "$secret_hits" | cut -c1-100 | sed 's/^/    /' >&2
+  cat >&2 <<'EOF'
+
+    `sb_secret_` and `service_role` mark a key that bypasses RLS entirely.
+    If this is a real key: remove it, then ROTATE it — assume it is burnt.
+    If it is genuinely just the words (a comment, a doc), rephrase it.
+EOF
+  status=1
+fi
+
+exit $status

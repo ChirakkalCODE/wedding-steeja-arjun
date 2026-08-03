@@ -3,8 +3,29 @@
 One-page wedding site for 6 September 2026, Akaparambu &amp; Nedumbassery, Kerala.
 
 **Built so far: the hero, the countdown, Our Story, the Schedule, the Venues,
-the Dress code, Travel & stay, Moments, Q&A and Contact.** Every link in the top
-bar resolves; `#rsvp` is the one stub left, awaiting its section.
+the Dress code, Travel & stay, Moments, Q&A, the reply form and Contact.** Every
+link in the top bar resolves, and so does `#rsvp` — the hero button and the top
+bar's "Let us know" pill both point at the reply form, which sits between Q&A
+and Contact.
+
+The reply form is `src/components/Rsvp.astro`, and the word "RSVP" is its `id`
+and nothing else — every word a guest reads is plain English. It posts to the
+`rsvp` edge function and never to the database; see **Supabase backend** below
+for why that is not a preference. Three things about it are load-bearing and
+easy to undo by accident:
+
+- Its no-JavaScript fallback is gated on its own `.rsvp-js` class, **not** the
+  page's `.js` class. `.js` is removed 2.5s after load by the reveal system's
+  dead man's switch (`src/pages/index.astro`), which would take the form with
+  it.
+- Turnstile's script is not in the document until the section is approached or
+  the form is touched, so a visit that never reaches it pays nothing. It has
+  four independent triggers, and the observer is the optimisation rather than
+  the mechanism — an observer that never fires would otherwise leave the form
+  permanently unsendable.
+- The POST carries the anon key in `Authorization` and `apikey`. The deployed
+  function has `verify_jwt` on, so Supabase's gateway rejects the request before
+  the function runs without it.
 
 Moments is driven entirely by `src/data/gallery.ts`. Adding a photo is one
 entry in that array — the grid, the lightbox and the reveal stagger all read
@@ -323,11 +344,47 @@ It is never "anon needs an insert policy".
 | `PUBLIC_SUPABASE_URL` | `.env`, compiled into the bundle | yes, by design |
 | `PUBLIC_SUPABASE_ANON_KEY` | `.env`, compiled into the bundle | yes, by design |
 | `PUBLIC_TURNSTILE_SITE_KEY` | `.env`, compiled into the bundle | yes, by design |
-| `SUPABASE_SERVICE_ROLE_KEY` | Edge Function secrets **only** | **never** — injected by the platform |
+| `SUPABASE_SERVICE_ROLE_KEY` | local `.env`, **and** Edge Function secrets | **never** — unprefixed, so never bundled |
 | `TURNSTILE_SECRET_KEY` | Edge Function secrets **only** | **never** |
 
-`.env` is gitignored (`.env`, `.env.*`, with `!.env.example` re-included).
-The two secrets appear in no file in this repo, and never should.
+The service-role key is in two places for two different reasons, and both are
+correct. The deployed function gets its copy injected by the platform — you do
+not set that one by hand. Your local `.env` needs its own copy because the admin
+proofs (reading a reply back, checking a constraint bites, confirming the table
+is empty after a test) all need a key that bypasses RLS, and Edge Function
+secrets are not readable from a local script.
+
+What makes that safe is the prefix, not the location: Astro only compiles
+`PUBLIC_`-prefixed variables into the client bundle, so an unprefixed value in
+`.env` never reaches a browser. Prefixing this one `PUBLIC_` would publish full
+read/write on every table to every guest. **Rotate it before launch** — by then
+it has been on a development machine, in shell history and in tool output.
+
+### The pre-commit guard
+
+`.gitignore` is advice; `git add -f .env` overrides it silently, and a secret
+that reaches a public history is not removed by deleting it in a later commit.
+So the actual control is `.githooks/pre-commit`, which refuses two things:
+
+- any staged env file, however it got staged — `.env.example` excepted;
+- any staged line carrying secret *material*: the sb-secret key prefix followed
+  by key characters, a service-role env name assigned a non-empty value, or the
+  service-role name appearing as a quoted value.
+
+It matches material rather than words on purpose. A first version rejected every
+line containing the bare strings and promptly rejected `.gitignore`,
+`.env.example` and the hook itself — the three files whose job is to name what
+they defend against. A guard that blocks its own documentation gets disabled
+within the week.
+
+`npm install` wires it up via the `prepare` script. Check it is live:
+
+```bash
+git config --get core.hooksPath      # -> .githooks
+```
+
+If that prints nothing, run `npm run prepare`. Hooks are per-clone: a fresh
+clone is unprotected until `npm install` has run at least once.
 
 ### Applying migrations
 

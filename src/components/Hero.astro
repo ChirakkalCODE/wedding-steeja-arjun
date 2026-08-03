@@ -87,11 +87,13 @@ const alt =
         rather than as a setting — the Schedule gives each one its own time. */}
     <p class="hero__where rise rise--2">Kerala, India</p>
 
-    {/* `#contact`, not `#rsvp`. There is no reply form on this site and never
-        was — the way a guest replies is to message one of the brothers, which is
-        what the Contact section is. `#rsvp` matched no element on the page, so
-        all three of these buttons were dead links. */}
-    <a class="hero__cta rise rise--3" href="#contact">Let us know you&rsquo;re coming</a>
+    {/* `#rsvp` again, and this time it resolves. It pointed at `#contact` for
+        as long as the reply form did not exist and the only way to answer was
+        to message one of the brothers; the form is now the last section but
+        one, and this is the button that should reach it. The brothers are
+        still one section further down, which is where a guest with no
+        JavaScript is sent from inside the form itself. */}
+    <a class="hero__cta rise rise--3" href="#rsvp">Let us know you&rsquo;re coming</a>
   </div>
 
   <p class="hero__scroll rise rise--3" aria-hidden="true">Scroll</p>
