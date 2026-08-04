@@ -30,12 +30,18 @@
  * the landing is exact rather than approximated, and the two can never drift
  * apart when one of them is edited.
  *
- * Without JavaScript the whole mechanism inverts cleanly: `.mono` is
- * `display: none`, the slot is simply visible, and the capsule renders solid
- * and complete from the first frame. Exactly one of the two monograms is ever
- * in the accessibility tree — the slot is removed from it by `visibility:
- * hidden` when the script is running, and `.mono` is removed by `display: none`
- * when it is not.
+ * Without JavaScript the monogram simply does not travel. `.mono` is painted
+ * from the first frame at its hero anchor in both states, and the script's only
+ * job is to move it; the slot is `visibility: hidden` unconditionally, so it
+ * reserves the row's width without ever being a second monogram. Exactly one of
+ * the two is in the accessibility tree, and it is always `.mono`.
+ *
+ * It was the other way round until the polish pass: `.mono` waited for
+ * `.nav-js`. That made the page's largest element wait for JavaScript, and on a
+ * throttled phone it cost 3.6s of LCP render delay — for a mark that needs no
+ * network and no script to be correct. The cost of the swap is that a no-JS
+ * visitor keeps a static monogram in the corner instead of one seated in the
+ * capsule, which is a fair trade and was made deliberately.
  *
  * The script below is written tight rather than airy, and that is a budget
  * decision: Astro leaves `is:inline` scripts exactly as written, so comments
@@ -159,7 +165,9 @@ const CTA_HREF = withBase('rsvp');
       above, so it is the same width at the same font-size and the measured
       landing is exact — and so that editing one without the other is not
       possible without noticing. Hidden, not absent: the row's width has to
-      include it. Visible, and the only monogram, when there is no script. */}
+      include it, and `visibility: hidden` still lays out so the script has a
+      real box to measure. Never visible in any state — `.mono` is the monogram
+      the reader sees whether or not the script runs. */}
   <p class="topbar__slot">S <em>&amp;</em> A</p>
 
   <nav class="topbar__nav" aria-label="Sections of this page">
@@ -271,10 +279,14 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
 
     Why the element is left alone: adding `role="button"`, `tabindex` or an
     aria-label would announce a way in to every screen-reader user on a wedding
-    invitation. The mark stays a <p>. The couple's keyboard route is three
-    Enters while it is focused, which requires focusing it first — reachable
-    with a screen reader's virtual cursor or by clicking it, and never offered
-    by Tab.
+    invitation. The mark stays a <p>.
+
+    Mouse only, and deliberately. There was an Enter-three-times handler here on
+    the theory that the couple could focus the mark and use the keyboard — but a
+    <p> with no tabindex cannot be focused, so `document.activeElement` was never
+    it and the branch could not fire. It is gone rather than fixed: making it
+    work would mean making the mark focusable, which is exactly the thing the
+    paragraph above refuses to do. The couple reach /admin from a bookmark.
 
     `document` rather than the element, and matched with closest(), so it works
     for whichever monogram is on screen: the one inside the hero and the one
@@ -305,12 +317,6 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
 
   document.addEventListener('click', function(e){
     if (e.target && e.target.closest && e.target.closest('[data-admin-gate]')) bump();
-  });
-
-  document.addEventListener('keydown', function(e){
-    if (e.key !== 'Enter') return;
-    var el = document.activeElement;
-    if (el && el.closest && el.closest('[data-admin-gate]')) bump();
   });
 })();
 </script>
@@ -367,8 +373,15 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
   /* -- the travelling monogram --------------------------------------------- */
 
   .mono {
-    /* Only with script. Without it the capsule's own slot is the monogram. */
-    display: none;
+    /* Painted from the first frame, script or no script.
+       ---------------------------------------------------------------------
+       It used to be `display: none` until `.nav-js` arrived, which made the
+       largest element on the page wait for JavaScript: on a slow phone that
+       was 3.6s of LCP render delay for a mark that never needed a byte of it.
+       Now the hero position IS the resting state and the script's only job is
+       to move it. Without script it simply stays in the corner of the
+       invitation frame, which is where it belongs anyway. */
+    display: block;
     position: fixed;
     /* Above the capsule shell, so it reads as sitting in the capsule rather
        than under its backdrop blur. */
@@ -391,10 +404,6 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
       font-size 0.42s cubic-bezier(0.16, 1, 0.3, 1),
       color 0.42s cubic-bezier(0.16, 1, 0.3, 1),
       text-shadow 0.42s ease;
-  }
-
-  :global(.nav-js) .mono {
-    display: block;
   }
 
   /* The travel. `--mono-dx` / `--mono-dy` are written by the script; until they
@@ -492,8 +501,12 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
   }
 
   /* Holds its width and its place in the row, but is neither painted nor in the
-     accessibility tree — `.mono` is the one the reader gets. */
-  :global(.nav-js) .topbar__slot {
+     accessibility tree — `.mono` is the one the reader gets, in every state.
+     Unconditional now: `.mono` no longer waits for `.nav-js`, so this one is
+     never the visible monogram and gating it on script would only give a no-JS
+     visitor a second one. `visibility: hidden` still lays out, which is what
+     the measurement in the script depends on. */
+  .topbar__slot {
     visibility: hidden;
   }
 

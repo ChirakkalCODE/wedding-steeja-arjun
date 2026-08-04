@@ -31,14 +31,15 @@
  * There is no progressive-enhancement story available: the site is a static
  * build on GitHub Pages, so there is no server of ours to receive a native form
  * POST, and the write is gated on a captcha that only a server can verify. So
- * rather than shipping a form that silently does nothing, the form is hidden
- * until the script that drives it has actually run and a WhatsApp fallback
- * stands in its place until then.
+ * rather than shipping a form that silently does nothing, a browser with script
+ * switched off is given the WhatsApp numbers instead.
  *
- * That gate is `.rsvp-js`, added by this component's own script as its first
- * statement — NOT the page's `.js` class. `.js` is removed 2.5s after load by
- * the reveal system's dead man's switch in index.astro, which would take the
- * form with it. Nothing in this section may hang off `.js`.
+ * That decision is made in CSS, by `@media (scripting: none)` — at parse time,
+ * before the first frame. It was made by a `.rsvp-js` class the script added
+ * instead, and that cost the page its entire CLS: the form appeared and the
+ * fallback vanished one frame in, moving the footer about 1090px while it was
+ * still on screen. See the note above the rules themselves for what the swap
+ * costs in return, which is the script-ran-but-threw case.
  *
  * ---------------------------------------------------------------------------
  * Turnstile
@@ -438,11 +439,6 @@ const primary = CONTACTS[0];
   if (form && section) init(form, section);
 
   function init(form: HTMLFormElement, section: HTMLElement) {
-    /* First, before anything can throw: this is what swaps the WhatsApp
-       fallback for the form, so it must only ever be set on a page where this
-       script is genuinely running. */
-    document.documentElement.classList.add('rsvp-js');
-
     const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
     const first = $<HTMLInputElement>('rsvp-first');
@@ -1050,28 +1046,49 @@ const primary = CONTACTS[0];
   }
 
   /* -- the two states -------------------------------------------------------
-     `.rsvp-js` is set by this section's own script, and only by it. Never
-     `.js`: that class is removed 2.5s after load by the reveal system's dead
-     man's switch, which would take the form down with it.
+     The form is the default and the fallback is the exception, decided in CSS
+     at first paint rather than by a class the script adds a frame later.
+
+     It used to be the other way round: the fallback shipped visible and
+     `.rsvp-js` swapped it for the form once the script ran. That swap was the
+     page's entire CLS — one shift of 0.113 at 150ms, in which a ~960px document
+     became a ~2050px one and the footer travelled about 1090px down the page
+     while it was still on screen. Nothing was mis-sized; the layout was simply
+     decided too late.
+
+     `scripting: none` is the same question asked at parse time. The trade is
+     that it answers "is script enabled", where `.rsvp-js` answered "did this
+     script actually run" — so a browser that runs scripts but throws before
+     `init` now shows a form that cannot send instead of the WhatsApp numbers.
+     Support is Chrome 120+, Safari 17+, Firefox 113+; older browsers with
+     script switched off land on the form rather than the fallback.
   ------------------------------------------------------------------------- */
-  .rsvp__form {
-    display: none;
-  }
 
   /* `:not([hidden])` is load-bearing rather than tidy. The success panel hides
      the form with `form.hidden = true`, and `[hidden]`'s `display: none` lives
-     in the user-agent sheet — this rule would simply outrank it and leave the
-     form on the screen underneath the thank-you. */
-  :global(.rsvp-js) .rsvp__form:not([hidden]) {
+     in the user-agent sheet — a bare `display: block` here would outrank it and
+     leave the form on screen underneath the thank-you. */
+  .rsvp__form:not([hidden]) {
     display: block;
   }
 
-  :global(.rsvp-js) .rsvp__nojs {
+  .rsvp__nojs {
     display: none;
+    margin-top: clamp(2rem, 4vw, 2.75rem);
   }
 
-  .rsvp__nojs {
-    margin-top: clamp(2rem, 4vw, 2.75rem);
+  @media (scripting: none) {
+    /* Same selector as the rule above, not a plainer one: a media query adds no
+       specificity, so `.rsvp__form { display: none }` would lose to
+       `.rsvp__form:not([hidden])` and leave the form on screen with script off.
+       Matched, it wins on source order instead. */
+    .rsvp__form:not([hidden]) {
+      display: none;
+    }
+
+    .rsvp__nojs {
+      display: block;
+    }
   }
 
   .rsvp__nojs-lead {
