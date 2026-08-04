@@ -571,7 +571,11 @@ function renderExpanded(row: Rsvp): HTMLElement {
     el('div', { class: 'editor__grid' },
       field('First name', row.first_name, (v) => void patchInRow(row.id, { first_name: v.trim() })),
       field('Last name', row.last_name, (v) => void patchInRow(row.id, { last_name: v.trim() })),
-      field('Phone', row.phone, (v) => void patchInRow(row.id, { phone: v.trim() }), { type: 'tel' }),
+      /* `|| null`, like the two textareas below and unlike the names: the
+         column is nullable but its CHECK still refuses a malformed non-null
+         value, and `''` is malformed. Sending the empty string is how clearing
+         a phone became "Could not save that change" instead of a blank. */
+      field('Phone', row.phone, (v) => void patchInRow(row.id, { phone: v.trim() || null }), { type: 'tel' }),
     ),
 
     el('div', { class: 'editor__toggles' },

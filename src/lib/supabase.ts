@@ -70,7 +70,11 @@ export type Rsvp = {
   id: string;
   first_name: string;
   last_name: string;
-  phone: string;
+  /* Nullable since 0007, which dropped `not null` to let a guest reply without
+     leaving a number. The CHECK constraint is unchanged and still rejects a
+     malformed NON-null value — `null ~ '...'` is null, and a CHECK treats null
+     as passing. */
+  phone: string | null;
   /* Still selected by `select('*')`, so it stays on the type to keep this an
      honest mirror of the table — but nothing reads it. The column was kept
      nullable and unused rather than dropped; the admin editor and the CSV
@@ -88,6 +92,11 @@ export type Rsvp = {
   source: string;
   /** Generated: 1 + companions.length. */
   party_size: number;
-  /** Generated: digits of `phone`. Duplicates are expected and allowed. */
-  phone_normalised: string;
+  /**
+   * Generated: digits of `phone`. Duplicates are expected and allowed.
+   *
+   * Null exactly when `phone` is — the expression generates from it — so the
+   * duplicate check has to skip empty keys rather than group them together.
+   */
+  phone_normalised: string | null;
 };
