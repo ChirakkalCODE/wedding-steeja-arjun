@@ -56,7 +56,6 @@ const COLUMNS = [
   'first_name',
   'last_name',
   'phone',
-  'email',
   'attending_mass',
   'attending_reception',
   'party_size',
@@ -75,11 +74,13 @@ export function toCsv(rows: readonly Rsvp[]): string {
         r.first_name,
         r.last_name,
         /* Leading `+` of an E.164 number is exactly the injection shape rule 2
-           guards against, so every phone in the file arrives quoted. That is
-           correct and not a bug to "fix" later — it is a phone number, not a
-           subtraction. */
+           guards against, so every phone in the file arrives with a leading
+           apostrophe — `'+919847012345`. It is not additionally wrapped in
+           quotes, because it contains no comma, quote or newline for rule 3 to
+           react to. Both facts are correct and neither is a bug to "fix" later:
+           the apostrophe is what makes a spreadsheet read it as a phone number
+           rather than as a subtraction. */
         r.phone,
-        r.email,
         r.attending_mass ? 'yes' : 'no',
         r.attending_reception ? 'yes' : 'no',
         r.party_size,

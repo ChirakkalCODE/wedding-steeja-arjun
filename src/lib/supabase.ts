@@ -23,11 +23,42 @@ if (!url || !anonKey) {
   );
 }
 
+/**
+ * Storage is named explicitly rather than left to detection.
+ *
+ * `persistSession: true` on its own was not enough: supabase-js decides where
+ * to put the session by sniffing the environment, and when that sniff comes
+ * back negative it silently falls back to an in-memory store. The symptom was
+ * ugly and hard to attribute — signing in worked, the first SELECT worked, and
+ * then every write failed with `permission denied for table rsvps`, because the
+ * session existed only in a closure and the next request went out as `anon`,
+ * which has every privilege revoked. Nothing in localStorage, no error, no
+ * warning.
+ *
+ * Naming the store and the key removes the guess. It also pins the key, so a
+ * future change to how the project ref is derived cannot silently orphan an
+ * existing session and sign the couple out.
+ *
+ * `globalThis.localStorage` rather than `window.localStorage`: this module is
+ * only ever bundled for the browser, but the optional access means importing it
+ * anywhere else fails loudly at the call site instead of throwing at module
+ * load.
+ */
+const browserStorage =
+  typeof globalThis !== 'undefined' && globalThis.localStorage
+    ? globalThis.localStorage
+    : undefined;
+
 export const supabase = createClient(url, anonKey, {
   auth: {
     // The admin signs in once on a device they own and stays signed in.
     persistSession: true,
     autoRefreshToken: true,
+    storage: browserStorage,
+    /* Explicit, and deliberately not derived from `url`. The session must
+       survive a reload and a browser restart, so the key it is filed under has
+       to be stable across builds. */
+    storageKey: 'sa-wedding-admin-auth',
     // Nothing arrives back via a URL fragment: there is no magic-link or OAuth
     // flow here, just email and password for the one account.
     detectSessionInUrl: false,
@@ -40,6 +71,10 @@ export type Rsvp = {
   first_name: string;
   last_name: string;
   phone: string;
+  /* Still selected by `select('*')`, so it stays on the type to keep this an
+     honest mirror of the table — but nothing reads it. The column was kept
+     nullable and unused rather than dropped; the admin editor and the CSV
+     export both deliberately leave it out. Do not wire it back into either. */
   email: string | null;
   attending_mass: boolean;
   attending_reception: boolean;

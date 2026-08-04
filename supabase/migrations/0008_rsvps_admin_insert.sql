@@ -1,0 +1,34 @@
+-- ---------------------------------------------------------------------------
+-- 0008_rsvps_admin_insert.sql
+--
+-- The admin area could not add an entry by hand.
+--
+-- 13b item 6 shipped "Add entry" — the path for a reply that arrives as a phone
+-- call to a brother, a WhatsApp message, or somebody saying it at church. Most
+-- replies to this wedding will arrive that way, so it is not a marginal
+-- feature: without it the couple keep a second guest list on paper, which is
+-- the exact failure the admin area exists to prevent.
+--
+-- It has never worked once. 0003 rebuilt the policies after moving the
+-- allowlist into `private` and recreated exactly three — select, update,
+-- delete. No insert policy was ever written, for `authenticated` or for anyone
+-- else, so `insert` fell through to the default deny.
+--
+-- What made it hard to see is that the table-level grant was never the problem:
+-- `authenticated` has held the INSERT privilege the whole time. The grant says
+-- yes and RLS says no, so nothing is wrong until runtime, where it surfaces as
+--
+--     new row violates row-level security policy for table "rsvps"
+--
+-- The public form is unaffected and always has been. It posts to the `rsvp`
+-- edge function, which writes with the service role and bypasses RLS outright —
+-- which is why the guest list has been filling up normally while the admin's
+-- own insert was refused.
+--
+-- Same predicate as the other three, deliberately. `source` is left
+-- unconstrained here rather than pinned to 'manual': that label belongs to the
+-- UI that sets it, and an admin who can already edit and delete every row gains
+-- nothing by mislabelling one.
+-- ---------------------------------------------------------------------------
+create policy rsvps_admin_insert on public.rsvps
+  for insert to authenticated with check ((select private.is_admin()));

@@ -37,6 +37,7 @@ import { clear, el, toast } from './dom';
 
 type Filter = 'all' | 'coming' | 'not-coming' | 'has-message' | 'flagged';
 type Sort = 'received' | 'party';
+type Companion = { name: string; type: 'adult' | 'child' };
 
 const state = {
   rows: [] as Rsvp[],
@@ -44,6 +45,21 @@ const state = {
   filter: 'all' as Filter,
   sort: 'received' as Sort,
   expanded: new Set<string>(),
+  /**
+   * Companion rows added in an open editor but not yet given a name, keyed by
+   * reply id.
+   *
+   * They cannot be written yet and should not be: `rsvps_companions_shape`
+   * refuses a blank name, and it is right to. A nameless head in `party_size`
+   * is a seat at the reception nobody can be sat in, and the couple order food
+   * against that number.
+   *
+   * So "Add another person" draws the row and stops there. It becomes part of
+   * the reply on the same blur that names it — one write, once there is
+   * something true to write. Dropped when the editor closes, because an unnamed
+   * row is not a change anybody made.
+   */
+  drafts: new Map<string, Companion[]>(),
   /* Ticked rows, for the bulk delete. Keyed on id rather than index so it
      survives a re-sort, a filter change and a row disappearing underneath it. */
   selected: new Set<string>(),
@@ -236,7 +252,7 @@ async function patch(
 
   state.rows[index] = after;
   if (rerender) renderDashboard();
-  else refreshInPlace(id);
+  else refreshInPlace();
 
   const { data, error } = await supabase
     .from('rsvps')
@@ -260,7 +276,7 @@ async function patch(
      phone_normalised, which the duplicate marker reads. */
   state.rows[index] = data as Rsvp;
   if (rerender) renderDashboard();
-  else refreshInPlace(id);
+  else refreshInPlace();
   return true;
 }
 
@@ -269,17 +285,26 @@ const patchInRow = (id: string, changes: Partial<Rsvp>) =>
   patch(id, changes, { rerender: false });
 
 /**
- * Rebuild only what the change can have altered: the counters, and the summary
- * line of the row that changed. Leaves every open editor — and the caret inside
- * it — exactly where it was.
+ * Rebuild only what the change can have altered: the counters, and every
+ * summary line. Leaves every open editor — and the caret inside it — exactly
+ * where it was.
  */
-function refreshInPlace(id: string): void {
+function refreshInPlace(): void {
   const stats = document.querySelector('.stats');
   if (stats) stats.replaceWith(renderStats());
 
-  const row = state.rows.find((r) => r.id === id);
-  const tr = document.querySelector(`tr[data-row-id="${CSS.escape(id)}"]`);
-  if (row && tr) tr.replaceChildren(...summaryCells(row, duplicatePhones(state.rows)));
+  /* Every summary line, not only the row that was edited. The duplicate marker
+     is derived from the whole set, so giving one reply the same number as
+     another changes two rows — and rebuilding just the one being typed into
+     left the other silently unmarked until the next full render, which is
+     precisely when a human would have wanted to see it.
+     Safe for focus: the open editor is a separate <tr class="row__expansion">
+     and is not touched here. */
+  const duplicates = duplicatePhones(state.rows);
+  for (const row of state.rows) {
+    const tr = document.querySelector(`tr[data-row-id="${CSS.escape(row.id)}"]`);
+    if (tr) tr.replaceChildren(...summaryCells(row, duplicates));
+  }
 }
 
 async function remove(row: Rsvp): Promise<void> {
@@ -423,6 +448,7 @@ function toggle(label: string, checked: boolean, onChange: (next: boolean) => vo
 
 function renderCompanions(row: Rsvp): HTMLElement {
   const list = row.companions ?? [];
+  const drafts = state.drafts.get(row.id) ?? [];
 
   const editors = list.map((companion, i) =>
     el('div', { class: 'companion' },
@@ -463,10 +489,70 @@ function renderCompanions(row: Rsvp): HTMLElement {
     ),
   );
 
+  /* The unnamed rows. Identical to the editors above but for what naming one
+     does: it is the blur that commits, because a companion is only writable
+     once it has a name. See `state.drafts`. */
+  const putDrafts = (next: Companion[]) => {
+    if (next.length === 0) state.drafts.delete(row.id);
+    else state.drafts.set(row.id, next);
+  };
+  /* Read back out of the state rather than closed over: the Age select below
+     rewrites the drafts without re-rendering, so the array this function was
+     built from is one edit out of date the moment it is used. Closing over it
+     would silently drop a "child" chosen before the name was typed. */
+  const liveDrafts = () => state.drafts.get(row.id) ?? [];
+
+  const draftEditors = drafts.map((draft, i) =>
+    el('div', { class: 'companion' },
+      field('Name', draft.name, (next) => {
+        const name = next.trim();
+        /* Blurred still blank — off to the Age select, most likely. Nothing to
+           save and nothing to say about it; the row stays put. */
+        if (!name) return;
+        const current = liveDrafts();
+        const mine = current[i] ?? draft;
+        putDrafts(current.filter((_, j) => j !== i));
+        /* Full re-render, like Remove below: this row stops being a draft and
+           becomes a real companion, so the panel's structure changes. */
+        void patch(row.id, { companions: [...list, { ...mine, name }] });
+      }),
+      el('label', { class: 'editor__field' },
+        el('span', { class: 'editor__label' }, 'Age'),
+        el('select', {
+          class: 'admin__input',
+          onchange: (event: Event) => {
+            const next = liveDrafts().slice();
+            if (!next[i]) return;
+            next[i] = {
+              ...next[i],
+              type: (event.target as HTMLSelectElement).value as 'adult' | 'child',
+            };
+            /* Into the draft and no further: there is nothing to write yet, and
+               re-rendering would pull focus off the select just used. */
+            putDrafts(next);
+          },
+        },
+          el('option', { value: 'adult', selected: draft.type === 'adult' }, 'Adult'),
+          el('option', { value: 'child', selected: draft.type === 'child' }, 'Child (under 12)'),
+        ),
+      ),
+      el('button', {
+        class: 'admin__button admin__button--quiet',
+        type: 'button',
+        onclick: () => { putDrafts(liveDrafts().filter((_, j) => j !== i)); renderDashboard(); },
+      }, 'Remove'),
+    ),
+  );
+
+  /* Counts the drafts too, or the twenty-first person is one the form offers to
+     add and the database then refuses. */
+  const total = list.length + drafts.length;
+
   return el('div', { class: 'editor__block' },
     el('h3', { class: 'editor__heading' }, `Coming with them (${list.length})`),
-    list.length === 0 ? el('p', { class: 'editor__empty' }, 'Nobody — replying for themselves only.') : null,
+    total === 0 ? el('p', { class: 'editor__empty' }, 'Nobody — replying for themselves only.') : null,
     ...editors,
+    ...draftEditors,
     /* Missing until now: the editor could rename, retype and remove a
        companion but not add one, so a guest who rang to say "actually my
        mother is coming too" could not be recorded without editing the
@@ -474,10 +560,8 @@ function renderCompanions(row: Rsvp): HTMLElement {
     el('button', {
       class: 'admin__button admin__button--quiet',
       type: 'button',
-      hidden: list.length >= 20,
-      onclick: () => {
-        void patch(row.id, { companions: [...list, { name: '', type: 'adult' }] });
-      },
+      hidden: total >= 20,
+      onclick: () => { putDrafts([...drafts, { name: '', type: 'adult' }]); renderDashboard(); },
     }, 'Add another person'),
   );
 }
@@ -488,7 +572,6 @@ function renderExpanded(row: Rsvp): HTMLElement {
       field('First name', row.first_name, (v) => void patchInRow(row.id, { first_name: v.trim() })),
       field('Last name', row.last_name, (v) => void patchInRow(row.id, { last_name: v.trim() })),
       field('Phone', row.phone, (v) => void patchInRow(row.id, { phone: v.trim() }), { type: 'tel' }),
-      field('Email', row.email, (v) => void patchInRow(row.id, { email: v.trim() || null }), { type: 'email' }),
     ),
 
     el('div', { class: 'editor__toggles' },
@@ -518,7 +601,13 @@ function renderExpanded(row: Rsvp): HTMLElement {
           el('button', {
             class: 'admin__button',
             type: 'button',
-            onclick: () => void patchInRow(row.id, { flagged_spam: false }),
+            /* Full re-render, not the in-place one: clearing the flag deletes
+               this whole block, and the in-place refresh touches only the
+               counters and the summary line. Without it the totals correct
+               themselves and the badge goes, while the panel still says the
+               reply is not counted and still offers the button — so the couple
+               press it again and wonder which of the two screens is lying. */
+            onclick: () => void patch(row.id, { flagged_spam: false }),
           }, 'Not spam — count this reply'),
         )
       : null,
@@ -550,8 +639,12 @@ function summaryCells(row: Rsvp, duplicates: Set<string>): HTMLElement[] {
     type: 'button',
     'aria-expanded': String(open),
     onclick: () => {
-      if (open) state.expanded.delete(row.id);
-      else state.expanded.add(row.id);
+      if (open) {
+        state.expanded.delete(row.id);
+        /* An unnamed companion row is not a change anybody made, so it does not
+           survive the panel it was drawn in. */
+        state.drafts.delete(row.id);
+      } else state.expanded.add(row.id);
       renderDashboard();
     },
   }, `${row.first_name} ${row.last_name}`);
@@ -1184,14 +1277,28 @@ export async function start(mount: HTMLElement): Promise<void> {
      false and alarming. */
   let hadSession = false;
 
+  /* Whether the list has already been fetched for the session now in hand.
+     Recovering a stored session delivers *both* `SIGNED_IN` and
+     `INITIAL_SESSION` for that one session — in that order — so treating
+     "either event" as the cue to load fetched everything twice on every
+     visit: two `is_admin` probes and two full selects, for one page load.
+     Latching it here rather than dropping `SIGNED_IN` from the condition,
+     because `SIGNED_IN` is also the only cue a fresh sign-in gives. Cleared
+     on the signed-out branch below, so signing back in still refetches. */
+  let loaded = false;
+
   supabase.auth.onAuthStateChange((event, session) => {
     if (session) {
       hadSession = true;
       state.userId = session.user?.id;
       state.email = session.user?.email;
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') void loadRows();
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && !loaded) {
+        loaded = true;
+        void loadRows();
+      }
       return;
     }
+    loaded = false;
     state.rows = [];
     state.expanded.clear();
     /* Signing out deliberately is not an expiry, and neither is arriving
