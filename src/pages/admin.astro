@@ -775,7 +775,12 @@ import '../styles/global.css';
           border-bottom-right-radius: 0;
         }
 
-        .row__cell {
+        /* `.table` on the front so this outranks the `.table td` blanket above.
+           A class plus a type selector beats a lone class, so `.row__cell` lost
+           and every cell stayed `display: block` — which left `justify-content`
+           and `gap` doing nothing and printed each label jammed against its
+           value, right-aligned, as "PHONE+919847012121". */
+        .table .row__cell {
           display: flex;
           align-items: baseline;
           justify-content: space-between;
@@ -795,13 +800,22 @@ import '../styles/global.css';
           text-align: left;
         }
 
-        /* The name is the card's heading rather than a labelled row. */
-        .row__cell:first-child {
+        /* The name is the card's heading rather than a labelled row, and the
+           tick is just a tick.
+
+           Keyed on the label rather than on position. These were `:first-child`
+           when the name genuinely was the first cell; 13b item 6 put a select
+           checkbox in front of every row, which moved the name to second and
+           gave it a "NAME" label it was never meant to carry. Naming the cell
+           says what is meant and survives the next column that arrives. */
+        .table .row__cell[data-label='Select'],
+        .table .row__cell[data-label='Name'] {
           padding-top: 0.5rem;
           text-align: left;
         }
 
-        .row__cell:first-child::before {
+        .row__cell[data-label='Select']::before,
+        .row__cell[data-label='Name']::before {
           display: none;
         }
 
