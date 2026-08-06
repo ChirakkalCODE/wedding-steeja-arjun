@@ -41,6 +41,9 @@
      same colour as --color-shell, just softened. */
   --shell-rgb: 251 248 243; /* --color-shell */
   --ink-rgb: 36 28 24; /* --color-ink */
+  /* Added with the invitation card, whose inset hairline is the ochre at 30%.
+     Same rule as the two above: a softened token, not a second hex code. */
+  --ochre-rgb: 197 138 42; /* --color-ochre */
 
   /* The photo scrim, and the type shadow that sits on it. Deliberately deeper
      and warmer than --color-ink: an ink-coloured or grey wash turns the ochre

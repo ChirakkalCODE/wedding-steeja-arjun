@@ -6,7 +6,6 @@ import {
   WIDE_MEDIA,
   WIDE_SIZES,
 } from '../lib/hero-media';
-import { withBase } from '../lib/paths';
 
 const media = await heroMedia();
 
@@ -14,13 +13,22 @@ const alt =
   'Steeja and Arjun sitting together on a ledge in front of a weathered ochre wall painted with a large white bird.';
 ---
 
-{/* Seven lines and nothing else. The hero used to carry the ceremony times, the
-    two village names and the reply deadline as well — every one of which is
-    stated again, in full and in context, further down the page. Repeating them
-    here bought nothing and cost the one thing an invitation is for: a first
-    screen that says who, when, and where, and then gets out of the way. The
-    room those four lines took has been given back to the names. */}
-<section class="hero" aria-labelledby="couple">
+{/* A photograph with a caption on it, and nothing else.
+    ---------------------------------------------------------------------------
+    The invitation used to be printed over the picture: a double-hairline frame,
+    an eyebrow, the names, a rule, the date, the place, a pill and a Scroll
+    label — nine elements, and a heavy wash to carry them. All of it has moved
+    onto the card below, which overlaps the bottom of the photo as if laid on
+    top of it, and the frame motif went with it.
+
+    What is left here is a caption. It names the couple and the day quietly in
+    the bottom-left corner, and the rest of the photograph is allowed to be a
+    photograph. The scrim is a pool in that one corner now rather than a wash
+    over everything.
+
+    Still zero client JavaScript, and the <h1> is no longer here — it is on the
+    card. This is a <p>. */}
+<section class="hero">
   {/* Art-directed by hand: `<Picture>` emits no `media`, so it cannot switch
       crops. Same astro:assets pipeline, same formats and widths. Order matters —
       the browser takes the first `<source>` whose media and type both match, so
@@ -71,52 +79,21 @@ const alt =
 
   <div class="hero__scrim" aria-hidden="true"></div>
 
-  <div class="hero__frame">
-    <p class="hero__eyebrow rise">Together with their families</p>
-
-    <h1 class="hero__names rise" id="couple">
-      <span>Steeja</span>
-      <span class="hero__amp">&amp;</span>
-      <span>Arjun</span>
-    </h1>
-
-    <div class="hero__rule rise rise--2" aria-hidden="true"></div>
-
-    <p class="hero__when rise rise--2">Sunday, 6 September 2026</p>
+  {/* Bottom-left, and held clear of the card by the same `--invite-overlap` the
+      card pulls itself up by — one number, so the two cannot drift into each
+      other at any width. */}
+  <div class="hero__caption">
+    <p class="hero__title">Steeja <em>&amp;</em> Arjun</p>
     {/* The country, not the itinerary. Akaparambu and Nedumbassery are two
         different places an hour apart, and naming them here reads as an address
         rather than as a setting — the Schedule gives each one its own time. */}
-    <p class="hero__where rise rise--2">Kerala, India</p>
-
-    {/* `#rsvp` again, and this time it resolves. It pointed at `#contact` for
-        as long as the reply form did not exist and the only way to answer was
-        to message one of the brothers; the form is now the last section but
-        one, and this is the button that should reach it. The brothers are
-        still one section further down, which is where a guest with no
-        JavaScript is sent from inside the form itself. */}
-    {/* A route, not an anchor. The form moved to its own page in 13b, and this
-        button is the one most likely to be pressed before the page has been
-        read — sending it 8,000 pixels down to a callout, only for the guest to
-        press a second button, is one hop too many. */}
-    <a class="hero__cta rise rise--3" href={withBase('rsvp')}>
-      Let us know you&rsquo;re coming
-    </a>
+    <p class="hero__meta">Sunday, 6 September 2026 · Kerala, India</p>
   </div>
-
-  <p class="hero__scroll rise rise--3" aria-hidden="true">Scroll</p>
 </section>
 
 <style>
   .hero {
     position: relative;
-    display: grid;
-    /* `1fr` resolves to minmax(auto, 1fr): the frame fills the viewport, but on
-       a very short screen it grows past it rather than clipping the names. */
-    grid-template-rows: 1fr;
-    /* An implicit `auto` column is sized to its max-content — the longest
-       unwrapped line — and overflows the viewport instead of letting the text
-       wrap. `minmax(0, 1fr)` caps it at the container width. */
-    grid-template-columns: minmax(0, 1fr);
     min-height: 100vh;
     min-height: 100svh;
     overflow: hidden;
@@ -140,229 +117,75 @@ const alt =
     object-position: 50% 38%;
   }
 
+  /* A pool, not a wash.
+     -----------------------------------------------------------------------
+     The old scrim darkened the whole frame because a nine-element invitation
+     was printed across the middle of it. Two quiet lines in one corner need
+     far less, and the photograph is the point.
+
+     Two layers, both doing one job each:
+       · an ellipse anchored to the bottom-left corner, carrying the caption;
+       · a short fade at the very top, which is only there so the monogram —
+         shell-coloured, and not ours to move — keeps its footing over a bright
+         part of the picture.
+     Everything between the two reads as the photograph. */
   .hero__scrim {
     position: absolute;
     inset: 0;
     z-index: 1;
     background-image:
-      /* The inner stop is 0.38 rather than fully transparent. The brief's
-         value left the centre of the scrim clear — which is exactly where the
-         content sits, and on this photograph exactly where the sunlit ochre
-         wall is. Measured over the real composited pixels, the type landed at
-         2.4-3.4:1 where WCAG asks 4.5:1 (see the note in README). This is the
-         smallest change that clears the threshold at every viewport from
-         320px to 2560px; the gradient's geometry and outer stop are the
-         brief's, untouched. */
       radial-gradient(
-        120% 80% at 50% 45%,
-        rgb(var(--shade-rgb) / 0.38) 30%,
-        rgb(var(--shade-rgb) / 0.45) 100%
+        78% 62% at 6% 100%,
+        rgb(var(--shade-rgb) / 0.74) 0%,
+        rgb(var(--shade-rgb) / 0.5) 34%,
+        rgb(var(--shade-rgb) / 0.16) 62%,
+        rgb(var(--shade-rgb) / 0) 82%
       ),
       linear-gradient(
         180deg,
-        rgb(var(--shade-rgb) / 0.52) 0%,
-        rgb(var(--shade-rgb) / 0.12) 38%,
-        rgb(var(--shade-rgb) / 0.72) 100%
+        rgb(var(--shade-rgb) / 0.3) 0%,
+        rgb(var(--shade-rgb) / 0.08) 16%,
+        rgb(var(--shade-rgb) / 0) 30%
       );
   }
 
-  /* -- invitation-card frame ---------------------------------------------- */
+  /* -- caption ------------------------------------------------------------- */
 
-  .hero__frame {
-    position: relative;
-    z-index: 2;
-    display: grid;
-    /* Same max-content trap as `.hero` above — without this a long line runs
-       off the side of a phone instead of wrapping. */
-    grid-template-columns: minmax(0, 1fr);
-    align-content: center;
-    /* Deliberately NOT `justify-items: center`: that would re-introduce the
-       same problem per row. The rows stretch and the text is centred inside
-       them; the one item that must hug its content opts out below.
-
-       Grown from clamp(3rem, 9vw, 5.5rem) with the four removed lines. The
-       frame is a card, and a card with fewer words on it wants more margin,
-       not the same margin and a hole in the middle. */
-    --pad-y: clamp(4rem, 11vw, 7rem);
-    margin: var(--frame-inset);
-    padding: var(--pad-y) clamp(1.5rem, 6vw, 4.5rem);
-    border: 1px solid rgb(var(--shell-rgb) / 0.42);
-    text-align: center;
-    text-wrap: balance;
-  }
-
-  /* Short viewports — 720p laptops, and small phones in the 568px-tall class.
-     The padding above is driven by viewport *width*, so on a screen that is
-     short for its width it pushes the frame's bottom edge past the fold. The
-     names are also allowed to grow to 7rem now, so this guard does more work
-     than it used to. */
-  @media (min-width: 900px) and (max-height: 860px), (max-height: 640px) {
-    .hero__frame {
-      --pad-y: clamp(1.25rem, 3.5svh, 7rem);
-      /* Extra below keeps the compressed content clear of the Scroll label,
-         which lives in the gutter rather than in the frame's flow. */
-      padding-bottom: calc(var(--pad-y) + 1.25rem);
-    }
-  }
-
-  /* The top bar is fixed over the hero, so the frame has to hold its own
-     content out from under it. Only below 900px: there the bar and the centred
-     content share a width and a wrapped eyebrow would run into the monogram. On
-     wider screens the bar sits in the far corners and the content never reaches
-     it. Both terms are the bar's own, declared in TopBar.astro — deriving them
-     here from its padding is how the two drifted apart last time. */
-  @media (max-width: 899.98px) {
-    /* No script: the bar renders solid and complete over the hero (see the
-       inversion note in TopBar.astro), so the frame clears the whole of it. */
-    .hero__frame {
-      padding-top: max(var(--pad-y), calc(var(--bar-h) + 0.5rem));
-    }
-
-    /* With script, the bar over the hero is the monogram and nothing else. The
-       pill and the 48px burger are only reserving space at that point, and
-       holding the invitation down by 48px to clear an invisible control is a
-       lot of a phone screen to give away. */
-    :global(.nav-js) .hero__frame {
-      padding-top: max(var(--pad-y), calc(var(--bar-h-hero) + 0.75rem));
-    }
-  }
-
-  .hero__frame::after {
-    content: '';
+  .hero__caption {
     position: absolute;
-    inset: 6px;
-    border: 1px solid rgb(var(--shell-rgb) / 0.22);
-    pointer-events: none;
+    z-index: 2;
+    left: clamp(1.5rem, 6vw, 4rem);
+    /* Clear of the card, by construction. `--invite-overlap` is how far the
+       card is pulled up over the photo, so adding to it is the one arrangement
+       that cannot collide however the card's height changes. The fallback keeps
+       this honest if the hero is ever used on a page without the card. */
+    bottom: calc(var(--invite-overlap, 0px) + clamp(1.75rem, 5vw, 3rem));
+    /* Never let a long line run under the card's shadow on a wide screen. */
+    max-width: min(28rem, calc(100% - clamp(3rem, 12vw, 8rem)));
   }
 
-  /* -- content ------------------------------------------------------------- */
-
-  .hero__eyebrow {
-    font-size: 0.7rem;
-    line-height: 1.6;
-    letter-spacing: 0.34em;
-    /* Tracking is added after the last letter too, which pulls centred text
-       off-axis by half a space; the indent puts it back. */
-    text-indent: 0.34em;
-    text-transform: uppercase;
-    /* Secondary type sits a little closer to full shell than the brief's
-       values. Over a photograph, opacity is an expensive way to buy hierarchy —
-       size, tracking and weight already carry it, and every point of opacity
-       given back here is a point of scrim the photograph does not have to pay
-       for. Same reasoning for .hero__where and .hero__scroll. */
-    color: rgb(var(--shell-rgb) / 0.95);
-  }
-
-  /* The vertical rhythm is capped by height as well as width — a 1280x720
-     screen has plenty of the first and very little of the second. */
-  .hero__names {
-    margin-top: clamp(1.4rem, min(3.4vw, 4.6svh), 2.4rem);
+  .hero__title {
+    margin: 0;
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: clamp(3.2rem, 12vw, 7rem);
-    /* Unitless, so swapping in Instrument Serif over the Georgia fallback
-       cannot change the block height. */
-    line-height: 0.95;
-    text-shadow: 0 2px 24px rgb(var(--shade-deep-rgb) / 0.35);
-  }
-
-  /* Must sit after the base rule, not up in the short-viewport block with the
-     padding it belongs to: same specificity, so source order is the only thing
-     deciding it, and above it simply never applies. On a 1280x720 laptop the
-     12vw term caps out at the full 7rem and the frame's bottom edge lands
-     within a few pixels of the fold; against viewport height it is 65px. */
-  @media (min-width: 900px) and (max-height: 860px), (max-height: 640px) {
-    .hero__names {
-      font-size: clamp(3.2rem, 9vh, 7rem);
-    }
-  }
-
-  .hero__names span {
-    display: block;
-  }
-
-  .hero__amp {
-    font-size: 0.5em;
-    font-style: italic;
+    /* A caption, not a headline — the headline is on the card. */
+    font-size: clamp(1.5rem, 3.5vw, 2.25rem);
     line-height: 1.15;
+    text-shadow: 0 2px 18px rgb(var(--shade-deep-rgb) / 0.45);
   }
 
-  .hero__rule {
-    width: clamp(3rem, 10vw, 6rem);
-    height: 1px;
-    margin-top: clamp(2rem, min(4.6vw, 5.6svh), 3rem);
-    margin-inline: auto;
-    background-image: linear-gradient(
-      90deg,
-      rgb(var(--shell-rgb) / 0) 0%,
-      rgb(var(--shell-rgb) / 0.85) 50%,
-      rgb(var(--shell-rgb) / 0) 100%
-    );
+  .hero__title em {
+    font-style: italic;
   }
 
-  .hero__when {
-    margin-top: clamp(1.8rem, min(4vw, 5svh), 2.5rem);
-    font-size: 1rem;
+  .hero__meta {
+    margin: 0.55rem 0 0;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
     line-height: 1.5;
-    letter-spacing: 0.18em;
-    text-indent: 0.18em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-  }
-
-  .hero__where {
-    margin-top: 0.6rem;
-    font-size: 0.95rem;
-    line-height: 1.6;
-    color: rgb(var(--shell-rgb) / 0.92);
-  }
-
-  .hero__cta {
-    margin-top: clamp(2.3rem, min(5vw, 6svh), 3.2rem);
-    /* Opts out of the stretched row so the pill hugs its label. */
-    justify-self: center;
-    max-width: 100%;
-    padding: 0.95rem 1.9rem;
-    border: 1px solid rgb(var(--shell-rgb) / 0.6);
-    border-radius: 999px;
-    background-color: rgb(var(--shell-rgb) / 0);
-    color: var(--color-shell);
-    font-size: 0.9rem;
-    line-height: 1.3;
-    letter-spacing: 0.04em;
-    text-decoration: none;
-    transition:
-      background-color 0.3s ease,
-      border-color 0.3s ease,
-      color 0.3s ease;
-  }
-
-  .hero__cta:hover,
-  .hero__cta:focus-visible {
-    background-color: var(--color-shell);
-    border-color: var(--color-shell);
-    color: var(--color-ink);
-  }
-
-  .hero__scroll {
-    position: absolute;
-    z-index: 3;
-    /* Centred with left/right rather than a translate, so the entrance
-       animation owns `transform` outright. */
-    left: 0;
-    right: 0;
-    bottom: calc(var(--frame-inset) + clamp(1rem, 2.6vw, 1.75rem));
-    font-size: 0.65rem;
-    line-height: 1;
-    letter-spacing: 0.28em;
-    text-indent: 0.28em;
-    text-transform: uppercase;
-    text-align: center;
-    color: rgb(var(--shell-rgb) / 0.85);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .hero__cta {
-      transition: none;
-    }
+    color: rgb(var(--shell-rgb) / 0.8);
+    text-shadow: 0 1px 14px rgb(var(--shade-deep-rgb) / 0.5);
   }
 </style>

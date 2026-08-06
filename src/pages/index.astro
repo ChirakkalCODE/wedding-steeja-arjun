@@ -12,6 +12,7 @@ import Faq from '../components/Faq.astro';
 import FilmStrip from '../components/FilmStrip.astro';
 import Gallery from '../components/Gallery.astro';
 import Hero from '../components/Hero.astro';
+import Invitation from '../components/Invitation.astro';
 import ImageBand from '../components/ImageBand.astro';
 import LineArt from '../components/LineArt.astro';
 import RsvpCallout from '../components/RsvpCallout.astro';
@@ -264,6 +265,10 @@ const fontFaces = [
         otherwise, and the next Tab would return to the top of the page. */}
     <main id="main" tabindex="-1">
       <Hero />
+      {/* Directly after the hero and nowhere else: it pulls itself up over the
+          photograph with a negative margin, so the two are only layered while
+          they are adjacent. */}
+      <Invitation />
       <Countdown />
       <Story />
 
