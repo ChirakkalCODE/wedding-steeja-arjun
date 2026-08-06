@@ -46,22 +46,17 @@ export const FAQ: readonly FaqItem[] = [
       'We have professional photographers with us all day, so you can simply enjoy the moments. During the ceremony in the church we kindly ask that no phones or cameras are used, so everyone can be fully present. Afterwards, at the reception, please take as many photos as you like.',
   },
 
-  // TODO — REVIEW BEFORE LAUNCH. The two questions below were not supplied by
-  // the couple; they were written to cover cases the rest of the site already
-  // implies (children are invited, and companions are entered by name on the
-  // reply form). The substance follows from those decisions, but the wording is
-  // ours and should be read over before the link is shared.
+  // TODO — REVIEW BEFORE LAUNCH. The question below was not supplied by the
+  // couple; it was written to cover a case the rest of the site already implies
+  // (children are invited). The substance follows from that decision, but the
+  // wording is ours and should be read over before the link is shared.
+  //
+  // Its companion — "Can we bring someone with us?" — was removed on request.
   {
     id: 'children',
     question: 'Are children welcome?',
     answer:
       'Yes — children are very welcome. Please add their names when you reply, so we can plan seating and food for them.',
-  },
-  {
-    id: 'plus-ones',
-    question: 'Can we bring someone with us?',
-    answer:
-      'Please add every person coming with you by name when you reply, so we can count correctly.',
   },
   // END OF QUESTIONS TO REVIEW.
 

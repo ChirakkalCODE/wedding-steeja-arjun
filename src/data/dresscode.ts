@@ -27,7 +27,7 @@ export const GROUPS: readonly DressGroup[] = [
   {
     id: 'gentlemen',
     label: 'Gentlemen',
-    garment: 'Beige suits',
+    garment: 'Beige suits, or formal — white shirt and beige trousers',
     palette: ['#E5D9C3', '#D9C6A5', '#C9B393', '#B49E7C'],
   },
   // A fourth group for children is expected but the couple has not decided a

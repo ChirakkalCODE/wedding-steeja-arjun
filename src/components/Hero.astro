@@ -78,17 +78,6 @@ const alt =
   </picture>
 
   <div class="hero__scrim" aria-hidden="true"></div>
-
-  {/* Bottom-left, and held clear of the card by the same `--invite-overlap` the
-      card pulls itself up by — one number, so the two cannot drift into each
-      other at any width. */}
-  <div class="hero__caption">
-    <p class="hero__title">Steeja <em>&amp;</em> Arjun</p>
-    {/* The country, not the itinerary. Akaparambu and Nedumbassery are two
-        different places an hour apart, and naming them here reads as an address
-        rather than as a setting — the Schedule gives each one its own time. */}
-    <p class="hero__meta">Sunday, 6 September 2026 · Kerala, India</p>
-  </div>
 </section>
 
 <style>
@@ -117,97 +106,29 @@ const alt =
     object-position: 50% 38%;
   }
 
-  /* A pool, not a wash.
+  /* One corner, and only because the monogram is standing in it.
      -----------------------------------------------------------------------
-     The old scrim darkened the whole frame because a nine-element invitation
-     was printed across the middle of it. Two quiet lines in one corner need
-     far less, and the photograph is the point.
+     This has come down twice. It began as a wash over the whole frame, because
+     a nine-element invitation was printed across the middle of it. When that
+     moved to the card it became a pool in the bottom-left corner, for the two
+     caption lines. The caption is gone now too — nothing is printed on the
+     photograph at all — so the only thing left to carry is the monogram, which
+     is shell-coloured, sits at the top-left inset, and is not ours to move.
 
-     Two layers, both doing one job each:
-       · an ellipse anchored to the bottom-left corner, carrying the caption;
-       · a short fade at the very top, which is only there so the monogram —
-         shell-coloured, and not ours to move — keeps its footing over a bright
-         part of the picture.
-     Everything between the two reads as the photograph. */
+     So: an ellipse in that corner and nothing else. No bottom layer, no
+     full-width band. Everything below and right of the mark is the photograph
+     as shot. */
   .hero__scrim {
     position: absolute;
     inset: 0;
     z-index: 1;
-    background-image:
-      radial-gradient(
-        78% 62% at 6% 100%,
-        rgb(var(--shade-rgb) / 0.74) 0%,
-        rgb(var(--shade-rgb) / 0.5) 34%,
-        rgb(var(--shade-rgb) / 0.16) 62%,
-        rgb(var(--shade-rgb) / 0) 82%
-      ),
-      linear-gradient(
-        180deg,
-        rgb(var(--shade-rgb) / 0.3) 0%,
-        rgb(var(--shade-rgb) / 0.08) 16%,
-        rgb(var(--shade-rgb) / 0) 30%
-      );
+    background-image: radial-gradient(
+      58% 42% at 3% 0%,
+      rgb(var(--shade-rgb) / 0.62) 0%,
+      rgb(var(--shade-rgb) / 0.34) 38%,
+      rgb(var(--shade-rgb) / 0.1) 66%,
+      rgb(var(--shade-rgb) / 0) 84%
+    );
   }
 
-  /* -- caption ------------------------------------------------------------- */
-
-  .hero__caption {
-    position: absolute;
-    z-index: 2;
-    left: clamp(1.5rem, 6vw, 4rem);
-    /* Clear of the card, by construction. `--invite-overlap` is how far the
-       card is pulled up over the photo, so adding to it is the one arrangement
-       that cannot collide however the card's height changes. The fallback keeps
-       this honest if the hero is ever used on a page without the card. */
-    bottom: calc(var(--invite-overlap, 0px) + clamp(1.75rem, 5vw, 3rem));
-    /* Both axes pinned, and that is the whole of the page's CLS.
-       -----------------------------------------------------------------------
-       The box is anchored by `bottom`, so anything that changes its size moves
-       its top edge and Chrome records a shift. Two things could:
-
-         · width — it was `max-width`, so shrink-to-fit made the box as wide as
-           its longest line, and that line's width changes when Instrument Serif
-           swaps in over the Georgia fallback;
-         · height — the meta line sits exactly on a wrap boundary (two lines at
-           320-390px, one from 768px up), so Inter arriving over the system
-           fallback can flip its line count and with it the box's height.
-
-       The second is why the shift survived pinning the width and came back
-       intermittently at 0.004: it only fires when the swap lands after first
-       paint. A fixed height with the content bottom-aligned settles it — the
-       rect is the same before and after the fonts arrive, whatever they do to
-       the text inside it. Generous enough for three meta lines on the narrowest
-       screen; on wider ones the spare height is transparent and above the type,
-       where nothing can see it. */
-    width: min(28rem, calc(100% - clamp(3rem, 12vw, 8rem)));
-    height: 6.5rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-  }
-
-  .hero__title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-weight: 400;
-    /* A caption, not a headline — the headline is on the card. */
-    font-size: clamp(1.5rem, 3.5vw, 2.25rem);
-    line-height: 1.15;
-    text-shadow: 0 2px 18px rgb(var(--shade-deep-rgb) / 0.45);
-  }
-
-  .hero__title em {
-    font-style: italic;
-  }
-
-  .hero__meta {
-    margin: 0.55rem 0 0;
-    font-family: var(--font-body);
-    font-size: 0.8rem;
-    line-height: 1.5;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: rgb(var(--shell-rgb) / 0.8);
-    text-shadow: 0 1px 14px rgb(var(--shade-deep-rgb) / 0.5);
-  }
 </style>

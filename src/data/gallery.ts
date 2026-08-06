@@ -1,7 +1,8 @@
 import type { ImageMetadata } from 'astro';
 
 // Derived 1920px masters, never the originals — see scripts/prepare-media.mjs.
-import epk03357 from '../assets/photos/gallery/EPK03357.jpg';
+// EPK03357 is deliberately absent: the shoe detail is the band above Dress code
+// now (DetailBand.astro), and it should appear on the page exactly once.
 import epk03505 from '../assets/photos/gallery/EPK03505.jpg';
 import epk03516 from '../assets/photos/gallery/EPK03516.jpg';
 import epk03533 from '../assets/photos/gallery/EPK03533.jpg';
@@ -29,11 +30,6 @@ export const PHOTOS: readonly GalleryPhoto[] = [
     src: epw09695,
     alt: 'Steeja and Arjun sitting on a ledge in front of an ochre wall painted with a large white bird, both looking off to one side.',
     orientation: 'portrait',
-  },
-  {
-    src: epk03357,
-    alt: "Looking down from above at the hem of Steeja's red checked dress and her white trainers on the ledge, beside a faded figure painted on the wall below.",
-    orientation: 'landscape',
   },
   {
     src: epw00926,

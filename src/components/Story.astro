@@ -5,8 +5,13 @@ import { Picture } from 'astro:assets';
 import storyPhoto from '../assets/photos/EPW00926-4x5.jpg';
 
 /**
- * Placeholder wording, to be replaced with the couple's own. Kept in one place
- * so swapping it is an edit to this constant and nothing else.
+ * The bride's own words, verbatim. This replaced the placeholder wording the
+ * section shipped with, and it is written in the first person where the old
+ * copy spoke about the couple in the third — which is the point of it, so
+ * nothing here should be smoothed back towards a house voice.
+ *
+ * Kept in one place so swapping it is an edit to this constant and nothing
+ * else.
  *
  * The thank-you that used to close this section has moved to the image band
  * below it (see index.astro). It was the one line here that was addressed to
@@ -16,8 +21,11 @@ import storyPhoto from '../assets/photos/EPW00926-4x5.jpg';
  */
 export const STORY_COPY = {
   paragraphs: [
-    "Steeja and Arjun found love in each other's hearts and a home in each other's souls. What started as a chance encounter grew into a life of laughter, small adventures and a lot of ordinary days made better by the other person.",
-    "On 6 September 2026 they begin their forever in Kerala — and the only thing missing is the people who got them here. That's you.",
+    'Some stories begin with grand gestures. Ours didn’t.',
+    'It started quietly, somewhere between unexpected conversations, shared laughter, and realizing life felt a little lighter together. Before we knew it, the ordinary became our favorite part: the random adventures, the inside jokes, the comfortable silence, and the feeling of finding someone who simply felt like home.',
+    'We’re opposites in more ways than one, but somehow our kind of crazy matches perfectly. And if you ask us, we’d probably say we didn’t fall into a fairytale. We laughed our way into one.',
+    'On 6 September 2026, we’re choosing forever, and we’d love nothing more than to celebrate the beginning of our next chapter with the people who’ve been part of our story all along.',
+    'Now all that’s left is to make a few more unforgettable memories with all of you.',
   ],
 };
 ---
@@ -62,7 +70,7 @@ export const STORY_COPY = {
       <p class="story__eyebrow" data-anim="head">Our story</p>
 
       <h2 class="story__title" id="story-title" data-anim="head2">
-        A chance meeting, and then everything
+        A story we never saw coming
       </h2>
 
       {STORY_COPY.paragraphs.map((text) => <p class="story__paragraph">{text}</p>)}
@@ -87,7 +95,12 @@ export const STORY_COPY = {
     .story__inner {
       /* `minmax(0, …)` so a long word in the prose cannot widen its column. */
       grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-      align-items: center;
+      /* Not `stretch`, which is the grid default: the prose is five paragraphs
+         now and runs taller than the 4:5 photograph, and stretching would pull
+         the image out of its crop to match. The text column grows and the photo
+         keeps its shape, aligned to the top of it rather than floating in the
+         middle of a column half again its height. */
+      align-items: start;
     }
   }
 
