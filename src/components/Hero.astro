@@ -160,8 +160,13 @@ const alt =
        that cannot collide however the card's height changes. The fallback keeps
        this honest if the hero is ever used on a page without the card. */
     bottom: calc(var(--invite-overlap, 0px) + clamp(1.75rem, 5vw, 3rem));
-    /* Never let a long line run under the card's shadow on a wide screen. */
-    max-width: min(28rem, calc(100% - clamp(3rem, 12vw, 8rem)));
+    /* `width`, not `max-width`, and that is the whole of the page's CLS.
+       Shrink-to-fit made the box as wide as its longest line, so when Instrument
+       Serif swapped in over the Georgia fallback the box resized and Chrome
+       recorded a shift — 0.004, small but not zero. Pinned, the box holds its
+       rect and only the glyphs inside it reflow. The value also keeps a long
+       line out from under the card's shadow on a wide screen. */
+    width: min(28rem, calc(100% - clamp(3rem, 12vw, 8rem)));
   }
 
   .hero__title {
