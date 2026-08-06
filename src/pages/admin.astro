@@ -44,10 +44,41 @@ import '../styles/global.css';
   </head>
 
   <body class="admin-body">
-    {/* Replaced wholesale by the script. The text is what someone sees if the
-        script fails or is still arriving — never a blank page. */}
+    {/* The sign-in form, in the HTML.
+        -----------------------------------------------------------------------
+        It used to be one line of "Loading the guest list…" and nothing else,
+        because every pixel of this page — the form included — was built by the
+        script. That script is 233 kB, most of it @supabase/supabase-js, so on a
+        slow connection the only way in to the admin area sat behind a five
+        second download of a database client, and if the bundle never arrived it
+        sat there forever with no form and no error.
+
+        So the form ships. The button is disabled and says so until the script
+        adopts it — a control that cannot work yet must not look like one — and
+        `renderLogin` replaces this whole block the moment the script runs, so
+        there is still exactly one code path for the live form.
+
+        The watchdog below is the other half: if nothing has replaced this after
+        ten seconds, say so, rather than leaving "Loading" on screen forever. */}
     <main class="admin" id="admin-root">
-      <p class="admin__state">Loading the guest list…</p>
+      <div class="admin__centre">
+        <div class="admin__login" id="admin-boot">
+          <h1 class="admin__title">Guest list</h1>
+          <p class="admin__lead">Sign in to see the replies.</p>
+
+          <label class="admin__label" for="boot-email">Email</label>
+          <input class="admin__input" id="boot-email" type="email" autocomplete="username" disabled />
+
+          <label class="admin__label" for="boot-password">Password</label>
+          <input class="admin__input" id="boot-password" type="password" autocomplete="current-password" disabled />
+
+          <p class="admin__error" id="admin-boot-error" role="status"></p>
+
+          <button class="admin__button" type="button" id="boot-submit" disabled>
+            Starting…
+          </button>
+        </div>
+      </div>
     </main>
 
     <noscript>
@@ -63,8 +94,21 @@ import '../styles/global.css';
       import { start } from '../lib/admin/app';
 
       const mount = document.getElementById('admin-root');
+
+      /* Says something when nothing else will. `start` can only fail loudly if
+         it actually runs; this covers the case where the module never arrives
+         at all, which is the one that used to leave "Loading" on screen with no
+         way in and no explanation. Cleared as soon as the form is replaced. */
+      const watchdog = setTimeout(() => {
+        const note = document.getElementById('admin-boot-error');
+        if (note && document.getElementById('admin-boot')) {
+          note.textContent =
+            'Still loading. Check your connection and reload the page.';
+        }
+      }, 10000);
+
       if (mount) {
-        start(mount).catch((error) => {
+        start(mount).finally(() => clearTimeout(watchdog)).catch((error) => {
           /* Last resort. Anything that escapes `start` would otherwise leave
              the "Loading…" text on screen forever, which reads as a hang. */
           console.error('admin: failed to start', error);
