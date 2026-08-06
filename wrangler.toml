@@ -82,4 +82,15 @@ pages_build_output_dir = "dist"
 
 # The date the Workers runtime pins its behaviour to. Irrelevant while there are
 # no Pages Functions, and required for the file to be valid.
-compatibility_date = "2026-08-06"
+#
+# It MUST NOT be in the future, and "today" counts as the future: Cloudflare
+# accepts a date only up to the runtime it has actually deployed, which trails
+# the calendar by a few days. This file was written with `2026-08-06` — the day
+# it was written — while the runtime was workerd 1.20260804, and every build was
+# rejected at configuration validation, before `npm install`, with Pages quietly
+# continuing to serve the previous deployment.
+#
+# A past date never expires, because the runtime only moves forward. Reach for
+# `npm view workerd version` before raising this; the date in that version
+# number is the ceiling.
+compatibility_date = "2026-08-04"
