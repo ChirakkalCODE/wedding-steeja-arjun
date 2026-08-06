@@ -215,10 +215,20 @@ console.log(`  favicon.ico                32x32     ${((22 + icoPng.length) / 10
    3. Manifest
    ------------------------------------------------------------------------- */
 
-/* `base` has to be baked in: the site is a GitHub Pages *project* site, so it
-   is served from /wedding-steeja-arjun/ and every path in here is resolved
-   against the manifest's own location. Kept in step with astro.config.mjs. */
-const BASE = '/wedding-steeja-arjun/';
+/* The deploy root, baked in: every path in a manifest resolves against the
+   manifest's own location, and this file is written to public/ and served
+   verbatim, so it cannot import `withBase` and cannot read Astro's BASE_URL.
+
+   `/` since the move to Cloudflare Pages, which serves the project at the root
+   of its own hostname. It was '/wedding-steeja-arjun/' for GitHub Pages, where
+   the project lived under a path.
+
+   This is one of exactly two places that carry the deploy root independently —
+   the other is the file this writes, public/site.webmanifest, which is
+   committed. Keep both in step with `base` in astro.config.mjs; nothing checks
+   that they agree, and a wrong `scope` here does not break the site, it breaks
+   installing it to a home screen. */
+const BASE = '/';
 
 const manifest = {
   name: 'Steeja & Arjun — 6 September 2026',

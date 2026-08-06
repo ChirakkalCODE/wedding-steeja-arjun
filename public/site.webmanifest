@@ -2,26 +2,26 @@
   "name": "Steeja & Arjun — 6 September 2026",
   "short_name": "Steeja & Arjun",
   "description": "Steeja and Arjun are getting married in Kerala. Come celebrate with us.",
-  "start_url": "/wedding-steeja-arjun/",
-  "scope": "/wedding-steeja-arjun/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "theme_color": "#FBF8F3",
   "background_color": "#FBF8F3",
   "icons": [
     {
-      "src": "/wedding-steeja-arjun/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/wedding-steeja-arjun/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/wedding-steeja-arjun/favicon.svg",
+      "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

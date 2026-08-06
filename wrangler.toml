@@ -1,0 +1,72 @@
+# Cloudflare Pages project configuration.
+#
+# ---------------------------------------------------------------------------
+# What this file can and cannot do
+# ---------------------------------------------------------------------------
+# It sets the build OUTPUT DIRECTORY, and that is genuinely all this project
+# needs from it. Two things people expect to put here do not work, and both are
+# worth knowing before someone "fixes" this file:
+#
+#  1. THE BUILD COMMAND IS NOT HERE. Cloudflare Pages takes the build command
+#     and the root directory from the project's dashboard settings; there is no
+#     wrangler key for either. The value to set is recorded below so it is at
+#     least written down in the repository.
+#
+#  2. THE THREE PUBLIC_* VARIABLES ARE NOT HERE, AND MUST NOT BE PUT HERE.
+#     A `[vars]` block in a Pages wrangler file declares RUNTIME variables for
+#     Pages Functions. This site has no Functions, and — the part that matters —
+#     runtime variables are not visible to the build. Astro inlines
+#     `import.meta.env.PUBLIC_*` while the build runs, so a value that only
+#     exists at runtime reaches the bundle as `undefined`.
+#
+#     That is exactly the failure this project has already had once: a build
+#     that succeeded, a reply form that looked perfect, and a function URL of
+#     `undefined/functions/v1/rsvp`. Putting the three in `[vars]` would look
+#     like fixing it and would reproduce it.
+#
+#     Build-time variables on Cloudflare Pages exist ONLY in the dashboard:
+#     Workers & Pages > (this project) > Settings > Environment variables.
+#     Set all three, for BOTH Production and Preview:
+#
+#         PUBLIC_SUPABASE_URL         https://<project-ref>.supabase.co
+#         PUBLIC_SUPABASE_ANON_KEY    the anon / publishable key
+#         PUBLIC_TURNSTILE_SITE_KEY   the Turnstile site key (public half)
+#
+#     All three are public by design — they are readable in devtools on the
+#     deployed site. They are variables, not secrets. See .env.example.
+#
+#     Nothing in this repository can prove they were set, which is why
+#     `requirePublicEnv()` in astro.config.mjs fails the build when one is
+#     missing. If a Pages deploy stops with "Refusing to build", that is this
+#     paragraph, and the fix is in the dashboard rather than in the code.
+#
+# ---------------------------------------------------------------------------
+# A caution about adding to this file
+# ---------------------------------------------------------------------------
+# Once a Pages project has a wrangler file, Cloudflare treats it as the source
+# of truth for the fields it covers and those fields become read-only in the
+# dashboard. Build-time environment variables are NOT one of those fields and
+# stay editable — but adding a `[vars]` block here would take the runtime
+# variable UI away while still not affecting the build.
+#
+# ---------------------------------------------------------------------------
+# Dashboard settings that belong with this file
+# ---------------------------------------------------------------------------
+#   Framework preset        None  (or Astro — it only prefills the two below)
+#   Build command           npm run build
+#   Build output directory  dist
+#   Root directory          /
+#   Node version            22   (set NODE_VERSION=22 as a build variable; the
+#                                 GitHub workflow pinned 22 and the build has
+#                                 only ever been run on it)
+#
+# `npm run build` is `astro check && astro build`, then `postbuild` runs
+# `prune-dist.mjs`. npm runs postbuild on its own — do not add it to the
+# command, or the prune runs twice.
+
+name = "wedding-steeja-arjun"
+pages_build_output_dir = "dist"
+
+# The date the Workers runtime pins its behaviour to. Irrelevant while there are
+# no Pages Functions, and required for the file to be valid.
+compatibility_date = "2026-08-06"

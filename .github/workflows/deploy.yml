@@ -1,8 +1,46 @@
-name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages (disabled — fallback only)
+
+# ---------------------------------------------------------------------------
+# DISABLED, NOT DELETED. Hosting moved to Cloudflare Pages; this stays as the
+# way back if that goes wrong.
+#
+# The `push` trigger is gone and `workflow_dispatch` is kept, so this only ever
+# runs when a person presses "Run workflow" on the Actions tab. Nothing here is
+# scheduled and nothing reacts to a commit.
+#
+# The existing GitHub Pages deployment is NOT affected by this and is still
+# live: Pages keeps serving the last artifact it received, which was built with
+# `base: '/wedding-steeja-arjun'` and works. Both hosts run in parallel until
+# the Cloudflare one is verified.
+#
+# ---------------------------------------------------------------------------
+# READ THIS BEFORE PRESSING "RUN WORKFLOW"
+# ---------------------------------------------------------------------------
+# Running it as-is would REPLACE the working GitHub Pages site with a broken
+# one. `base` has been removed from astro.config.mjs, so a build from `main`
+# today emits root-absolute paths (`/rsvp`, `/_astro/…`) while GitHub Pages
+# still serves this repository from `/wedding-steeja-arjun/`. Every asset and
+# every link would 404 — and the site would still render its HTML, so it fails
+# looking like a styling bug rather than a routing one.
+#
+# To actually fall back, restore the config first:
+#
+#     git revert <the Cloudflare migration commit>     # or, by hand:
+#     #   astro.config.mjs   site: 'https://chirakkalcode.github.io'
+#     #                      base: '/wedding-steeja-arjun'
+#     #   public/robots.txt          both lines back to the /wedding-steeja-arjun prefix
+#     #   public/site.webmanifest    start_url, scope and the three icon srcs
+#     #   scripts/make-brand-assets.mjs   BASE = '/wedding-steeja-arjun/'
+#     #   src/layouts/Base.astro + src/pages/index.astro   the Astro.site fallback
+#
+#     git push
+#     # then run this workflow
+#
+# The Supabase edge function needs nothing: its CORS allowlist carries both
+# origins for exactly this reason (supabase/functions/rsvp/index.ts).
+# ---------------------------------------------------------------------------
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # Least privilege that still lets actions/deploy-pages publish.

@@ -1,5 +1,5 @@
 /**
- * The admin area. Client-rendered, because GitHub Pages cannot check a session
+ * The admin area. Client-rendered, because Cloudflare Pages cannot check a session
  * server-side — there is no server of ours to check one.
  *
  * ---------------------------------------------------------------------------
@@ -31,6 +31,7 @@
  * other reason you might be seeing this. See `renderEmpty`.
  */
 import { supabase, type Rsvp } from '../supabase';
+import { withBase } from '../paths';
 import { computeStats, duplicatePhones } from './stats';
 import { downloadCsv } from './csv';
 import { clear, el, toast } from './dom';
@@ -116,6 +117,22 @@ async function handleExpiredSession(): Promise<void> {
    Login
    ------------------------------------------------------------------------- */
 
+/**
+ * The way back to the wedding page, and the only link on this page that leaves
+ * it.
+ *
+ * One factory rather than three copies, because it appears in three places —
+ * the server-rendered boot form in admin.astro, the login form below, and the
+ * dashboard header — and the first of those is in a different file. Two of the
+ * three are here, so at least those cannot drift.
+ *
+ * `withBase` rather than a bare '/': the deploy root is configuration, and this
+ * page has been served from a sub-path before.
+ */
+function backLink(): HTMLAnchorElement {
+  return el('a', { class: 'admin__back', href: withBase('') }, 'Back to the wedding page');
+}
+
 function renderLogin(notice?: string): void {
   clear(root);
 
@@ -171,6 +188,7 @@ function renderLogin(notice?: string): void {
     password,
     error,
     submit,
+    backLink(),
   );
 
   root.append(el('div', { class: 'admin__centre' }, form));
@@ -899,6 +917,7 @@ function renderDashboard(): void {
         type: 'button',
         onclick: () => void supabase.auth.signOut(),
       }, 'Sign out'),
+      backLink(),
     ),
   );
 

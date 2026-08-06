@@ -10,8 +10,12 @@
 #   1. `noindex, nofollow` on the page itself
 #   2. excluded from sitemap.xml (see astro.config.mjs)
 #   3. this line
+# The path carries no `/wedding-steeja-arjun` prefix any more: that was the
+# GitHub Pages project sub-path, and on Cloudflare Pages the site is at the root
+# of its own hostname. A stale prefix here would disallow a path that does not
+# exist while leaving the real /admin crawlable.
 User-agent: *
 Allow: /
-Disallow: /wedding-steeja-arjun/admin
+Disallow: /admin
 
-Sitemap: https://chirakkalcode.github.io/wedding-steeja-arjun/sitemap-index.xml
+Sitemap: https://steeja-arjun.pages.dev/sitemap-index.xml
