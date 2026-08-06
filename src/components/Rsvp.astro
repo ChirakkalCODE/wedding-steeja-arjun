@@ -146,41 +146,85 @@ const primary = CONTACTS[0];
       </div>
 
       <!-- 2. Companions ---------------------------------------------------- -->
-      {/* Directly under the names, and above the phone, because it is the same
-          question: who is this reply for. A guest bringing three people answers
-          that while they are still thinking about names, rather than after a
-          country-code select has interrupted them.
+      {/* Directly under the names, because it is the same question: who is this
+          reply for. A guest bringing three people answers that while they are
+          still thinking about names.
+
+          Written for the oldest guest on the list, which is what every choice
+          in this block is for. No colour coding and no icons — a green tick and
+          an amber pill mean nothing to somebody who has never been taught the
+          convention, and this audience skews well past the age where that
+          vocabulary is assumed. Plain sentences instead, and one running total
+          at the foot that says the answer back in words.
+
+          The hard part is not adding people, it is knowing whether you counted
+          yourself. So it is said three times in three different ways: in the
+          heading ("who ELSE"), in the line under it ("you are already
+          counted"), and in the total, which is the only one that reflects what
+          the guest has actually done.
 
           Hidden entirely once both answers are No. The database refuses a
           decline that brings twenty people with it (see the edge function), and
           a field that can only produce a rejection should not be on the screen.
       */}
       <fieldset class="rsvp__field rsvp__fieldset" id="rsvp-companions-field">
-        <legend class="rsvp__label">Who is coming with you?</legend>
+        <legend class="rsvp__label">Who else is coming with you?</legend>
         <p class="rsvp__hint" id="rsvp-companions-hint">
-          Add everyone you&rsquo;re bringing. You don&rsquo;t need to add yourself.
+          You are already counted. Please add only the people coming with you.
         </p>
-        <p class="rsvp__empty" id="rsvp-companions-empty">Just me</p>
+
+        {/* A box rather than a bare line. Empty state as one line of grey text
+            reads as a caption about the control above it; the same words inside
+            a border read as the current answer, which is what this is. */}
+        <p class="rsvp__empty" id="rsvp-companions-empty">
+          Nobody added yet &mdash; that means you&rsquo;re coming on your own.
+        </p>
+
         <div class="rsvp__people" id="rsvp-people"></div>
-        <button class="rsvp__add" id="rsvp-add" type="button">
-          Add another person
-        </button>
+        <button class="rsvp__add" id="rsvp-add" type="button">Add a person</button>
+
+        {/* The line that tells a guest whether they got it right, and the reason
+            the rest of the block can stay this plain.
+
+            Deliberately a sentence and not a counter: no badge, no pill, no
+            digit set apart in its own box. "3" beside a label is something to
+            be decoded; "In total you are 3 people." is something to be read and
+            checked against the room. Body size and ink, like every other
+            sentence on the page.
+
+            Inside the fieldset, so it leaves with the question when both
+            answers are No — a guest who is not coming should not be told how
+            many of them are not coming. Filled in by syncPeople(), which is the
+            one function every add, remove and reset already goes through, so it
+            cannot fall out of step with the rows above it. */}
+        <p class="rsvp__total" id="rsvp-total" aria-live="polite"></p>
       </fieldset>
 
       {/* Cloned by the script for each row. Inert in the document: a <template>
           holds an inactive document fragment, so nothing inside it is a form
           control, is focusable, or is submitted. Kept beside the fieldset it
-          fills rather than left behind where the block used to be. */}
+          fills rather than left behind where the block used to be.
+
+          Two labels per row, not one. The row is "Person 2" and the box inside
+          it is "Their name" — the number is the guest's place in the list and
+          the label is what to type, and one word cannot be both. `role="group"`
+          with `aria-labelledby` is what carries the number to a screen reader
+          without nesting a second <fieldset> inside the one this row is
+          already in. */}
       <template id="rsvp-person-template">
-        <div class="rsvp__person">
+        <div class="rsvp__person" role="group">
+          <p class="rsvp__person-title" data-person-title></p>
+
           <div class="rsvp__field rsvp__person-name">
-            <label class="rsvp__label rsvp__label--small" data-person-label>Name</label>
+            <label class="rsvp__label rsvp__label--small" data-person-label>
+              Their name
+            </label>
             <input class="rsvp__input" type="text" maxlength="80" data-person-name />
             <p class="rsvp__error" role="alert" data-person-error></p>
           </div>
 
-          <div class="rsvp__person-age">
-            <span class="rsvp__label rsvp__label--small">Age</span>
+          <div class="rsvp__person-age" role="radiogroup" data-person-age>
+            <span class="rsvp__label rsvp__label--small" data-person-age-label>Age</span>
             <div class="rsvp__choices rsvp__choices--tight">
               <label class="rsvp__choice">
                 <input type="radio" value="adult" checked data-person-type />
@@ -188,19 +232,89 @@ const primary = CONTACTS[0];
               </label>
               <label class="rsvp__choice">
                 <input type="radio" value="child" data-person-type />
-                <span>Child (under 12)</span>
+                <span>Child under 12</span>
               </label>
             </div>
           </div>
 
-          <button class="rsvp__remove" type="button" data-person-remove>
-            Remove
-          </button>
+          {/* Text, not an aria-label. "Remove" on its own is a button a guest
+              has to work out the target of by looking at what it is nearest to,
+              and on a phone with three rows on screen that is a real mistake to
+              make. What it says is what it does, and a screen reader and the
+              eye are then reading the same words. */}
+          <button class="rsvp__remove" type="button" data-person-remove></button>
         </div>
       </template>
 
-      <!-- 3. Phone -------------------------------------------------------- -->
-      {/* Two controls, one answer, so the label belongs to the group rather
+      <!-- 3. The two questions -------------------------------------------- -->
+      {/* Radios, not checkboxes, and that is the whole point of asking twice.
+          An unticked checkbox cannot be told apart from "no" — it is both "I am
+          not coming" and "I did not read this". Two radios have three states:
+          yes, no, and nothing chosen, and only the third is allowed to be a
+          validation error. */}
+      <fieldset class="rsvp__field rsvp__fieldset">
+        <legend class="rsvp__label">
+          Will you come to the Wedding Mass at 3:30&nbsp;PM?
+        </legend>
+        <div class="rsvp__choices" aria-describedby="rsvp-mass-error">
+          <label class="rsvp__choice">
+            <input type="radio" name="attending_mass" value="yes" />
+            <span>Yes</span>
+          </label>
+          <label class="rsvp__choice">
+            <input type="radio" name="attending_mass" value="no" />
+            <span>No</span>
+          </label>
+        </div>
+        <p class="rsvp__error" id="rsvp-mass-error" role="alert"></p>
+      </fieldset>
+
+      <fieldset class="rsvp__field rsvp__fieldset">
+        <legend class="rsvp__label">
+          Will you come to the Reception at 6:00&nbsp;PM?
+        </legend>
+        <div class="rsvp__choices" aria-describedby="rsvp-reception-error">
+          <label class="rsvp__choice">
+            <input type="radio" name="attending_reception" value="yes" />
+            <span>Yes</span>
+          </label>
+          <label class="rsvp__choice">
+            <input type="radio" name="attending_reception" value="no" />
+            <span>No</span>
+          </label>
+        </div>
+        <p class="rsvp__error" id="rsvp-reception-error" role="alert"></p>
+      </fieldset>
+
+      <!-- 4. Message ------------------------------------------------------ -->
+      <div class="rsvp__field">
+        <label class="rsvp__label" for="rsvp-message">
+          Anything you&rsquo;d like to tell us? <span class="rsvp__optional">(optional)</span>
+        </label>
+        <textarea
+          class="rsvp__input rsvp__textarea"
+          id="rsvp-message"
+          name="message"
+          rows="4"
+          maxlength="1000"
+          aria-describedby="rsvp-message-count"></textarea>
+        {/* Empty and silent until the last 200 characters. A counter that is
+            always there is a limit announced to everyone who was never going to
+            reach it. `aria-live="polite"` so it is not read on every keystroke. */}
+        <p class="rsvp__count" id="rsvp-message-count" aria-live="polite"></p>
+      </div>
+
+      <!-- 5. Phone -------------------------------------------------------- -->
+      {/* Last, and below the message rather than above it. It sat between the
+          companions block and the two attendance questions, which put the one
+          optional field on the form — and the only one that opens a 200-item
+          country list — in the middle of the parts that are required. A guest
+          who stops there has answered nothing the couple actually need.
+          Everything required now runs without interruption from the first name
+          to the last question, and the two optional fields are together at the
+          foot where either can be skipped without losing the thread.
+
+          Two controls, one answer, so the label belongs to the group rather
           than to either box. A <fieldset> with a <legend> is how that is said
           without inventing an ARIA pattern; each control then carries its own
           short <label>, hidden from sight but not from a screen reader. */}
@@ -242,6 +356,11 @@ const primary = CONTACTS[0];
           </select>
 
           <label class="rsvp__sr" for="rsvp-phone">Phone number</label>
+          {/* No `required`. The legend says optional, checkPhone() returns ''
+              for an empty field, and the payload sends null — but the attribute
+              was still on the control, so a screen reader announced "Phone
+              number, required" over a field the form itself treats as optional.
+              `novalidate` hid it from everyone reading with their eyes. */}
           <input
             class="rsvp__input"
             id="rsvp-phone"
@@ -251,7 +370,6 @@ const primary = CONTACTS[0];
             autocomplete="tel"
             maxlength="20"
             aria-describedby="rsvp-phone-hint rsvp-phone-error"
-            required
           />
         </div>
         <p class="rsvp__hint" id="rsvp-phone-hint">
@@ -272,64 +390,6 @@ const primary = CONTACTS[0];
           stays — nullable and unwritten — because dropping it would need a
           migration and would destroy the addresses already collected. See the
           note beside the insert in supabase/functions/rsvp/index.ts. */}
-
-      <!-- 4. The two questions -------------------------------------------- -->
-      {/* Radios, not checkboxes, and that is the whole point of asking twice.
-          An unticked checkbox cannot be told apart from "no" — it is both "I am
-          not coming" and "I did not read this". Two radios have three states:
-          yes, no, and nothing chosen, and only the third is allowed to be a
-          validation error. */}
-      <fieldset class="rsvp__field rsvp__fieldset">
-        <legend class="rsvp__label">
-          Will you come to the Wedding Mass at 3:30&nbsp;PM?
-        </legend>
-        <div class="rsvp__choices" aria-describedby="rsvp-mass-error">
-          <label class="rsvp__choice">
-            <input type="radio" name="attending_mass" value="yes" />
-            <span>Yes</span>
-          </label>
-          <label class="rsvp__choice">
-            <input type="radio" name="attending_mass" value="no" />
-            <span>No</span>
-          </label>
-        </div>
-        <p class="rsvp__error" id="rsvp-mass-error" role="alert"></p>
-      </fieldset>
-
-      <fieldset class="rsvp__field rsvp__fieldset">
-        <legend class="rsvp__label">
-          Will you come to the Reception at 6:00&nbsp;PM?
-        </legend>
-        <div class="rsvp__choices" aria-describedby="rsvp-reception-error">
-          <label class="rsvp__choice">
-            <input type="radio" name="attending_reception" value="yes" />
-            <span>Yes</span>
-          </label>
-          <label class="rsvp__choice">
-            <input type="radio" name="attending_reception" value="no" />
-            <span>No</span>
-          </label>
-        </div>
-        <p class="rsvp__error" id="rsvp-reception-error" role="alert"></p>
-      </fieldset>
-
-      <!-- 5. Message ------------------------------------------------------ -->
-      <div class="rsvp__field">
-        <label class="rsvp__label" for="rsvp-message">
-          Anything you&rsquo;d like to tell us? <span class="rsvp__optional">(optional)</span>
-        </label>
-        <textarea
-          class="rsvp__input rsvp__textarea"
-          id="rsvp-message"
-          name="message"
-          rows="4"
-          maxlength="1000"
-          aria-describedby="rsvp-message-count"></textarea>
-        {/* Empty and silent until the last 200 characters. A counter that is
-            always there is a limit announced to everyone who was never going to
-            reach it. `aria-live="polite"` so it is not read on every keystroke. */}
-        <p class="rsvp__count" id="rsvp-message-count" aria-live="polite"></p>
-      </div>
 
       <!-- 6. Honeypot ----------------------------------------------------- -->
       {/* Off-screen by position, never `display: none`. A hidden field is the
@@ -455,6 +515,7 @@ const primary = CONTACTS[0];
     const honeypot = $<HTMLInputElement>('rsvp-hp-ref');
     const people = $<HTMLDivElement>('rsvp-people');
     const empty = $<HTMLParagraphElement>('rsvp-companions-empty');
+    const total = $<HTMLParagraphElement>('rsvp-total');
     const addButton = $<HTMLButtonElement>('rsvp-add');
     const companionsField = $<HTMLFieldSetElement>('rsvp-companions-field');
     const template = $<HTMLTemplateElement>('rsvp-person-template');
@@ -558,21 +619,41 @@ const primary = CONTACTS[0];
 
         const input = row.querySelector<HTMLInputElement>('[data-person-name]')!;
         const label = row.querySelector<HTMLLabelElement>('[data-person-label]')!;
+        const title = row.querySelector<HTMLElement>('[data-person-title]')!;
+        const age = row.querySelector<HTMLElement>('[data-person-age]')!;
+        const ageLabel = row.querySelector<HTMLElement>('[data-person-age-label]')!;
         const error = row.querySelector<HTMLElement>('[data-person-error]')!;
         const id = `rsvp-person-${i}`;
+
+        /* The number belongs to the ROW, not to the name box. It used to be the
+           <label> on the input — which made the box called "Person 2" and left
+           nothing anywhere saying what to type into it. Now the row is Person 2
+           and the box inside it is "Their name", which is two plain answers to
+           two different questions instead of one word doing both jobs badly. */
+        title.id = `${id}-title`;
+        title.textContent = `Person ${i + 1}`;
+        row.setAttribute('aria-labelledby', `${id}-title`);
 
         input.id = id;
         input.setAttribute('aria-describedby', `${id}-error`);
         label.htmlFor = id;
-        /* Numbered rather than "Name", so a guest adding six people is told
-           which box they are in and a screen reader reading the form linearly
-           does not meet six identical labels. */
-        label.textContent = `Person ${i + 1}`;
         error.id = `${id}-error`;
-        row
-          .querySelector('[data-person-remove]')!
-          .setAttribute('aria-label', `Remove person ${i + 1}`);
+
+        ageLabel.id = `${id}-age`;
+        age.setAttribute('aria-labelledby', `${id}-age`);
+
+        /* Visible text, so the eye and a screen reader are given the same
+           sentence. Any aria-label left over from when this said only "Remove"
+           would now override the text and quietly say something else. */
+        const remove = row.querySelector<HTMLButtonElement>('[data-person-remove]')!;
+        remove.removeAttribute('aria-label');
+        remove.textContent = `Remove Person ${i + 1}`;
       });
+
+      /* The guest is the 1. Everything else on this block is a way of asking
+         the question; this is the answer, in the words it would be said in. */
+      const heads = n + 1;
+      total.textContent = `In total you are ${heads} ${heads === 1 ? 'person' : 'people'}.`;
     }
 
     function addPerson() {
@@ -1313,11 +1394,19 @@ const primary = CONTACTS[0];
 
   /* -- companions ----------------------------------------------------------- */
 
+  /* The same box the rows below it are drawn in, because it occupies the same
+     slot and is the same kind of thing: the current state of the list. As one
+     line of loose grey text it read as a caption belonging to the hint above,
+     and a guest scanning for "what have I said so far" skipped straight past
+     it. Ink rather than muted — this is the answer, not an aside. */
   .rsvp__empty {
     margin-top: 0.8rem;
+    padding: 1rem;
+    border: 1px solid rgb(var(--ink-rgb) / 0.12);
+    border-radius: 4px;
     font-size: 1.0625rem;
     line-height: 1.6;
-    color: var(--color-muted);
+    color: var(--color-ink);
   }
 
   .rsvp__person {
@@ -1329,8 +1418,36 @@ const primary = CONTACTS[0];
     border-radius: 4px;
   }
 
+  /* `.rsvp__person-name` carries `.rsvp__field` for its input styling, and with
+     it the ~2rem top margin that separates one field of the form from the next.
+     Inside a 1rem-padded box that was already three centimetres of nothing
+     above the name; with "Person 2" now sitting above it, the number and the
+     box it numbers would have drifted apart entirely. The row's own 0.9rem grid
+     gap is the only spacing in here. */
+  .rsvp__person > .rsvp__field {
+    margin-top: 0;
+  }
+
+  .rsvp__person-title {
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--color-ink);
+  }
+
   .rsvp__person-name .rsvp__input {
     margin-top: 0.35rem;
+  }
+
+  /* A sentence, deliberately styled like every other sentence on the page: body
+     size, ink, no border, no background, no tabular figure set apart from the
+     words around it. The moment this gets a box it becomes a counter, and a
+     counter is a thing to be interpreted rather than read. */
+  .rsvp__total {
+    margin-top: 1rem;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--color-ink);
   }
 
   .rsvp__add,

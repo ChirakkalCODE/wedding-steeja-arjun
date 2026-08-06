@@ -11,6 +11,11 @@
  * preloads, which depend on a build-time image transform, and the reveal
  * script). Everything else below is identical on every page by construction.
  */
+import instrumentSerif from '@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2';
+import instrumentSerifItalic from '@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2';
+import interVariable from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2';
+import shadowsIntoLightTwo from '@fontsource/shadows-into-light-two/files/shadows-into-light-two-latin-400-normal.woff2';
+
 import { absoluteUrl, withBase } from '../lib/paths';
 
 type Props = {
@@ -48,6 +53,65 @@ const canonical = absoluteUrl(path, site);
    preview renders as a bare link — the scraper resolves it against its own
    host, not the page's, and quietly gets a 404. */
 const ogImageUrl = absoluteUrl(ogImage, site);
+
+/* Self-hosted, declared inline: a <link> to a font stylesheet would put a
+   render-blocking round trip in front of the hero for four @font-face rules.
+
+   HERE, not in index.astro, and that is the whole point of this block. It was
+   built on the home page and injected into the home page's head slot, so it
+   reached exactly one of the site's pages. /rsvp had `document.fonts.size ===
+   0` — not four faces still loading, no faces at all — and rendered the
+   monogram in `cursive`, its ampersand in Georgia and every word of the reply
+   form in system-ui.
+
+   That is what "the monogram on /rsvp still looks different" turned out to be.
+   Its box measured 66.573 x 29.188 on / and 66.333 x 28.521 on /rsvp, and the
+   capsule it travels into was 33px narrower, which put the landing 16.6px
+   further right. Not one DECLARED property differed between the two pages —
+   font-size, colour, font-family, line-height, top, left and text-shadow all
+   matched, and of 516 computed values only the ones derived from layout were
+   apart. Nothing was wrong with the CSS. The fonts were simply not there, and
+   nothing in the source of the page that was wrong said so.
+
+   So this is not "shared for tidiness": a page that does not get this block
+   does not get the site's typefaces. /admin still does not, and knowingly — it
+   writes its own <html> and <head> rather than using this layout, and its
+   problem is a 233 kB bundle in front of a sign-in form, not its typography. */
+const fontFaces = [
+  {
+    family: 'Instrument Serif',
+    style: 'normal',
+    weight: '400',
+    url: instrumentSerif,
+  },
+  {
+    family: 'Instrument Serif',
+    style: 'italic',
+    weight: '400',
+    url: instrumentSerifItalic,
+  },
+  {
+    family: 'Inter Variable',
+    style: 'normal',
+    weight: '100 900',
+    url: interVariable,
+  },
+  /* The handwriting accent, used in exactly two places: the top bar's monogram
+     and the signature under the band quote. Registered here with the others so
+     there is still only one stylesheet, but deliberately NOT preloaded below —
+     see the note beside the preload links. */
+  {
+    family: 'Shadows Into Light Two',
+    style: 'normal',
+    weight: '400',
+    url: shadowsIntoLightTwo,
+  },
+]
+  .map(
+    ({ family, style, weight, url }) =>
+      `@font-face{font-family:"${family}";font-style:${style};font-weight:${weight};font-display:swap;src:url(${url}) format("woff2")}`,
+  )
+  .join('');
 ---
 
 <!doctype html>
@@ -60,6 +124,28 @@ const ogImageUrl = absoluteUrl(ogImage, site);
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
+
+    {/* Before the icons, the card and the structured data, all of which are for
+        somebody other than the reader. These four rules and the three files
+        under them are the page's typography, and every page gets the same
+        ones. */}
+    <style is:inline set:html={fontFaces}></style>
+    <!-- Three, not four. Shadows Into Light Two is registered above but stays
+         off the critical path: it dresses two glyphs in the top-bar monogram,
+         which paints at the first frame in the `cursive` fallback either way,
+         and nothing on any page is laid out against that monogram's right edge.
+         Preloading it would put 15 kB in front of the two Instrument Serif
+         files that gate the real Largest Contentful Paint.
+
+         All three are needed above the fold on every page. On the home page the
+         wordmark is the LCP element (the full-bleed photo is disqualified — see
+         the note in TopBar.astro) and it contains an italic ampersand, so the
+         italic face is needed too; on /rsvp the italic dresses the monogram's
+         own ampersand and the heading is Instrument Serif. Left to font
+         matching, the italic is discovered a round trip late. -->
+    <link rel="preload" as="font" type="font/woff2" href={instrumentSerif} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={instrumentSerifItalic} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={interVariable} crossorigin />
 
     {/* Deliberately no <meta name="keywords">. No search engine has used it
         since the 2000s and it only ever advertises what you were hoping to

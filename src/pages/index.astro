@@ -1,9 +1,4 @@
 ---
-import instrumentSerif from '@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2';
-import instrumentSerifItalic from '@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2';
-import interVariable from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2';
-import shadowsIntoLightTwo from '@fontsource/shadows-into-light-two/files/shadows-into-light-two-latin-400-normal.woff2';
-
 import Contact from '../components/Contact.astro';
 import Countdown from '../components/Countdown.astro';
 import Dresscode from '../components/Dresscode.astro';
@@ -58,43 +53,9 @@ const schema = weddingEventSchema(
    byte-identical URLs and the browser fetches the photo exactly once. */
 const media = await heroMedia();
 
-/* Self-hosted, declared inline: a <link> to a font stylesheet would put a
-   render-blocking round trip in front of the hero for three @font-face rules. */
-const fontFaces = [
-  {
-    family: 'Instrument Serif',
-    style: 'normal',
-    weight: '400',
-    url: instrumentSerif,
-  },
-  {
-    family: 'Instrument Serif',
-    style: 'italic',
-    weight: '400',
-    url: instrumentSerifItalic,
-  },
-  {
-    family: 'Inter Variable',
-    style: 'normal',
-    weight: '100 900',
-    url: interVariable,
-  },
-  /* The handwriting accent, used in exactly two places: the top bar's monogram
-     and the signature under the band quote. Registered here with the others so
-     there is still only one stylesheet, but deliberately NOT preloaded below —
-     see the note beside the preload links. */
-  {
-    family: 'Shadows Into Light Two',
-    style: 'normal',
-    weight: '400',
-    url: shadowsIntoLightTwo,
-  },
-]
-  .map(
-    ({ family, style, weight, url }) =>
-      `@font-face{font-family:"${family}";font-style:${style};font-weight:${weight};font-display:swap;src:url(${url}) format("woff2")}`,
-  )
-  .join('');
+/* The @font-face block and the three font preloads used to be built here. They
+   are in Base.astro now, because a page that did not include this file did not
+   get the site's typefaces — which is what /rsvp and /admin had been doing. */
 ---
 
 <Base
@@ -134,23 +95,6 @@ const fontFaces = [
       imagesrcset={media.wide.avif.srcset}
       imagesizes={WIDE_SIZES}
     />
-
-    <style is:inline set:html={fontFaces}></style>
-    <!-- All three are needed above the fold, and the two Instrument Serif files
-         gate the Largest Contentful Paint: the wordmark is the LCP element (the
-         full-bleed photo is disqualified — see the note in TopBar.astro) and it
-         contains an italic ampersand, so it needs the italic face too. Left to
-         font matching the italic is discovered a round trip late.
-
-         Three, not four. Shadows Into Light Two is registered above but stays
-         off the critical path: it dresses two glyphs in the top-bar monogram,
-         which paints at the first frame in the `cursive` fallback either way,
-         and nothing on the page is laid out against that monogram's right edge
-         (see the note on .topbar__mark). Preloading it would put 15 kB in front
-         of the two Instrument Serif files that gate the real LCP element. -->
-    <link rel="preload" as="font" type="font/woff2" href={instrumentSerif} crossorigin />
-    <link rel="preload" as="font" type="font/woff2" href={instrumentSerifItalic} crossorigin />
-    <link rel="preload" as="font" type="font/woff2" href={interVariable} crossorigin />
 
     <!-- One observer for the three things on this page that animate as it is
          read — headings, images and the two drawn fronds — and the class that
