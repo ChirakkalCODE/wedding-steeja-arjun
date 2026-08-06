@@ -52,7 +52,7 @@ function requirePublicEnv() {
             'function URL and the Turnstile key — a form that looks right and\n' +
             'cannot send.\n\n' +
             '  Locally         copy .env.example to .env and fill it in\n' +
-            '  Cloudflare Pages  Workers & Pages > wedding-steeja-arjun >\n' +
+            '  Cloudflare Pages  Workers & Pages > steeja-arjun >\n' +
             '                    Settings > Environment variables, for BOTH\n' +
             '                    Production and Preview\n' +
             '  GitHub Actions  repository Settings > Secrets and variables >\n' +

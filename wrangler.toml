@@ -64,7 +64,20 @@
 # `prune-dist.mjs`. npm runs postbuild on its own — do not add it to the
 # command, or the prune runs twice.
 
-name = "wedding-steeja-arjun"
+# MUST match the Pages project name exactly — it is not a label, and it is not
+# the repository name. The project is `steeja-arjun`, which is why the site is
+# at steeja-arjun.pages.dev; a Pages project's name IS its subdomain.
+#
+# Getting this wrong does not warn, it fails the deploy: Cloudflare validates
+# the wrangler file before it does anything else, so the build is rejected in
+# zero seconds without running `npm install`, and Pages goes on serving the
+# previous deployment. The site then looks stale rather than broken, and the
+# push that "did nothing" looks like the git integration is disconnected.
+#
+# This file was added with the move to Cloudflare and carried the repository
+# name, so the first push after it landed was the first one that could fail
+# this way — and did.
+name = "steeja-arjun"
 pages_build_output_dir = "dist"
 
 # The date the Workers runtime pins its behaviour to. Irrelevant while there are
