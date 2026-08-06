@@ -26,7 +26,9 @@ const description =
 ---
 
 <Base title={title} description={description} path="rsvp">
-  <TopBar />
+  {/* No hero on this page, so the monogram is only ever over paper. Without
+      this it paints in the over-photograph colours and lands at 1.2:1. */}
+  <TopBar hero={false} />
 
   <main class="rsvp-page" id="main" tabindex="-1">
     {/* Above the heading, not below the form: someone who opened this from a

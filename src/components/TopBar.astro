@@ -119,6 +119,25 @@ const CTA = 'Let us know';
    13b. Still one constant for the capsule's pill and the mobile menu's last
    item, which drifted apart once already. */
 const CTA_HREF = withBase('rsvp');
+
+/**
+ * Whether this page opens with the hero photograph.
+ *
+ * The monogram is coloured for what is behind it: `--color-shell` over the
+ * photograph, `--color-ink` once it has travelled onto paper. On a page with no
+ * hero there is never anything but paper behind it, and it was being painted
+ * shell-on-shell — 1.2:1, the one accessibility failure on /rsvp.
+ *
+ * A prop rather than something the script works out, because the script cannot:
+ * its sentinel sits at the bottom of the first section, which on /rsvp is the
+ * reply form, so it reads "still above the hero" and puts the mark back into
+ * hero colours. This is decided at build time, where the answer is known.
+ */
+interface Props {
+  hero?: boolean;
+}
+
+const { hero = true } = Astro.props;
 ---
 
 {/* Runs before the header is parsed, so neither the burger nor the monogram is
@@ -150,7 +169,7 @@ const CTA_HREF = withBase('rsvp');
     who double-taps the mark must see no hint that anything is counting.
     `data-admin-gate` is what the script hooks; the couple's keyboard route is
     documented in the script below. */}
-<p class="mono" id="mono" data-admin-gate>S <em>&amp;</em> A</p>
+<p class:list={['mono', { 'mono--paper': !hero }]} id="mono" data-admin-gate>S <em>&amp;</em> A</p>
 
 {/* `topbar--hero` is server-rendered, and the hidden state it names is gated on
     `.nav-js` in the CSS. That pairing is what keeps the capsule off the hero
@@ -412,6 +431,18 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
   .mono--bar {
     transform: translate3d(var(--mono-dx, 0px), var(--mono-dy, 0px), 0);
     font-size: var(--mono-bar-size);
+    color: var(--color-ink);
+    text-shadow: none;
+  }
+
+  /* A page with no hero: paper is the only thing ever behind the mark, so it
+     never wears the over-photograph colours.
+
+     After `.mono--bar` deliberately, and at the same specificity, so it wins on
+     source order whichever way the script toggles that class. It has to: the
+     sentinel logic reads /rsvp's first section as a hero and turns `.mono--bar`
+     back off, which is what made the mark shell-on-shell at 1.2:1 there. */
+  .mono--paper {
     color: var(--color-ink);
     text-shadow: none;
   }
