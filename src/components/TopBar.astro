@@ -169,7 +169,7 @@ const { hero = true } = Astro.props;
     who double-taps the mark must see no hint that anything is counting.
     `data-admin-gate` is what the script hooks; the couple's keyboard route is
     documented in the script below. */}
-<p class:list={['mono', { 'mono--paper': !hero }]} id="mono" data-admin-gate>S <em>&amp;</em> A</p>
+<p class:list={['mono', { 'mono--bar': !hero }]} id="mono" data-admin-gate>S <em>&amp;</em> A</p>
 
 {/* `topbar--hero` is server-rendered, and the hidden state it names is gated on
     `.nav-js` in the CSS. That pairing is what keeps the capsule off the hero
@@ -179,7 +179,11 @@ const { hero = true } = Astro.props;
     the invitation on a slowly-delivered document does not happen. Without
     script the class is inert, because nothing gates on it, and the bar renders
     solid and complete as it must. */}
-<header class="topbar topbar--hero" id="topbar">
+<header
+  class:list={['topbar', { 'topbar--hero': hero }]}
+  id="topbar"
+  data-hero={String(hero)}
+>
   {/* Reserves the monogram's place in the row. Identical markup to `.mono`
       above, so it is the same width at the same font-size and the measured
       landing is exact — and so that editing one without the other is not
@@ -259,7 +263,7 @@ m.style.setProperty('--mono-dx',(r.left-parseFloat(c.left))+'px');
 m.style.setProperty('--mono-dy',(r.top-parseFloat(c.top))+'px')};
 place();addEventListener('resize',place,{passive:true});
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(place)}
-var h=document.querySelector('main > section');
+var h=b.dataset.hero==='false'?null:document.querySelector('main > section');
 if(h){var s=document.createElement('div');s.className='topbar__sentinel';h.appendChild(s);
 var seen=0,set=function(v){place();b.classList.toggle('topbar--hero',v);if(m)m.classList.toggle('mono--bar',!v)};
 set(s.getBoundingClientRect().top>0);
@@ -415,9 +419,25 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
     color: var(--color-shell);
     /* Over a photograph, not over paper. Dropped on arrival. */
     text-shadow: 0 1px 14px rgb(var(--shade-deep-rgb) / 0.45);
-    /* Never a pointer target: it is a mark, not a control, and in the capsule
-       it sits over the shell that the capsule's own hit area covers. */
-    pointer-events: none;
+    /* A pointer target, and only that.
+       ---------------------------------------------------------------------
+       This was `none`, and that is why the three-click way into /admin never
+       worked: the click landed on whatever sat behind the mark, so the
+       handler's `closest('[data-admin-gate]')` never matched and the counter
+       never moved. Nothing underneath it is itself clickable — over the hero
+       that is the photograph, and in the capsule it is the row's hidden slot —
+       so taking the clicks costs nothing.
+
+       Everything else here is about giving no sign that it is a target. No
+       role, no tabindex, no aria; a default cursor rather than a pointer; no
+       tap highlight on touch; and `user-select: none`, without which the third
+       click would select the paragraph and light "S & A" up in blue, which is
+       exactly the feedback a guest who double-taps must never see. */
+    pointer-events: auto;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
     transition:
       transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
       font-size 0.42s cubic-bezier(0.16, 1, 0.3, 1),
@@ -442,10 +462,6 @@ document.readyState!=='loading'?n():addEventListener('DOMContentLoaded',n);
      source order whichever way the script toggles that class. It has to: the
      sentinel logic reads /rsvp's first section as a hero and turns `.mono--bar`
      back off, which is what made the mark shell-on-shell at 1.2:1 there. */
-  .mono--paper {
-    color: var(--color-ink);
-    text-shadow: none;
-  }
 
   .mono em {
     font-family: var(--font-display);

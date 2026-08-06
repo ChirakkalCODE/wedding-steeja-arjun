@@ -39,12 +39,11 @@ export const FAQ: readonly FaqItem[] = [
     answer:
       'Please be seated in the church by 3:10 PM — the ceremony begins shortly after. Do allow time for parking and the short walk, so you can settle in calmly before the service starts.',
   },
-  {
-    id: 'photos',
-    question: 'Can we take photos?',
-    answer:
-      'We have professional photographers with us all day, so you can simply enjoy the moments. During the ceremony in the church we kindly ask that no phones or cameras are used, so everyone can be fully present. Afterwards, at the reception, please take as many photos as you like.',
-  },
+  // "Can we take photos?" was removed on request. It was the only place the
+  // church's no-phones-during-the-ceremony rule appeared, and that rule is now
+  // stated nowhere on the site — not here, not in the Schedule, not in the
+  // Venue section. Flagged when it was removed; restoring it means restoring
+  // this entry or saying it somewhere else.
 
   // TODO — REVIEW BEFORE LAUNCH. The question below was not supplied by the
   // couple; it was written to cover a case the rest of the site already implies

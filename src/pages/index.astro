@@ -6,7 +6,6 @@ import shadowsIntoLightTwo from '@fontsource/shadows-into-light-two/files/shadow
 
 import Contact from '../components/Contact.astro';
 import Countdown from '../components/Countdown.astro';
-import DetailBand from '../components/DetailBand.astro';
 import Dresscode from '../components/Dresscode.astro';
 import Footer from '../components/Footer.astro';
 import Faq from '../components/Faq.astro';
@@ -16,6 +15,7 @@ import Hero from '../components/Hero.astro';
 import Invitation from '../components/Invitation.astro';
 import ImageBand from '../components/ImageBand.astro';
 import LineArt from '../components/LineArt.astro';
+import Rings from '../components/Rings.astro';
 import RsvpCallout from '../components/RsvpCallout.astro';
 import Schedule from '../components/Schedule.astro';
 import Story from '../components/Story.astro';
@@ -271,6 +271,9 @@ const fontFaces = [
           they are adjacent. */}
       <Invitation />
       <Countdown />
+      {/* The last thing between the card and Our Story, so the rings have
+          closed before that heading is reached. */}
+      <Rings />
       <Story />
 
       {/* Was a single tall band of the lantern frame. The black and white
@@ -302,9 +305,6 @@ const fontFaces = [
 
       <Venue />
       <LineArt />
-      {/* Immediately above Dress code and nowhere else: the shoes are the last
-          thing seen before the question of what to wear. */}
-      <DetailBand />
       <Dresscode />
 
       {/* The embrace frame used to sit here as a short band and read as an

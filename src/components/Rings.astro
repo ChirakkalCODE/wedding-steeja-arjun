@@ -1,0 +1,158 @@
+---
+/**
+ * Two rings that converge as the page is read.
+ *
+ * Self-contained on purpose: markup, styles and the one fallback script all
+ * live here, so dropping the whole idea is deleting this file and one line in
+ * index.astro.
+ *
+ * Line only — 1px stroke, no fill, no gradient, no shine. It is a drawn mark in
+ * the same ochre as the hairlines elsewhere, not a graphic of jewellery.
+ *
+ * The convergence is finished before Our Story's heading arrives: the range
+ * ends at `cover 40%`, so the rings have closed while the block is still in the
+ * upper half of the viewport and the heading below it has not been reached.
+ */
+---
+
+<section class="rings" aria-hidden="true">
+  {/* Explicit width and height on the element, with the box reserved in CSS
+      before anything animates — the pair never changes the space it occupies,
+      so there is nothing here that can shift the page. */}
+  <svg
+    class="rings__svg"
+    width="240"
+    height="120"
+    viewBox="0 0 240 120"
+    fill="none"
+    focusable="false"
+    role="presentation"
+  >
+    <circle class="rings__ring rings__ring--left" cx="100" cy="60" r="34" />
+    <circle class="rings__ring rings__ring--right" cx="140" cy="60" r="34" />
+  </svg>
+</section>
+
+<style>
+  .rings {
+    display: flex;
+    justify-content: center;
+    /* Generous, and the reason the pair reads as a breath between two sections
+       rather than as decoration attached to either of them. */
+    padding-block: clamp(3.5rem, 9vw, 6rem);
+    background-color: var(--color-shell);
+  }
+
+  .rings__svg {
+    display: block;
+    /* The viewBox holds the rings at their furthest apart, so this width is the
+       total width of the pair at its widest — 180px on a phone, 240px up. */
+    width: clamp(180px, 22vw, 240px);
+    height: auto;
+    /* Reserves the box from the first frame, before the SVG is laid out. */
+    aspect-ratio: 2 / 1;
+    overflow: visible;
+  }
+
+  .rings__ring {
+    fill: none;
+    stroke: var(--color-ochre);
+    stroke-opacity: 0.45;
+    /* Held at 1px however the SVG is scaled: without this the stroke thins as
+       the box shrinks on a phone and the rings turn grey. */
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* The converged state is the resting state.
+     -----------------------------------------------------------------------
+     Both circles are authored where they end up, so with no animation at all —
+     reduced motion, an old browser, a failed script — the rings are simply
+     drawn interlocked. Nothing has to run for this to be correct. */
+
+  @keyframes rings-converge-left {
+    from {
+      transform: translateX(-40px);
+    }
+  }
+
+  @keyframes rings-converge-right {
+    from {
+      transform: translateX(40px);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* Scroll-linked, where the browser can do it without a script. `view()`
+       ties the animation to this element's own progress through the viewport;
+       `entry 0% cover 40%` closes the rings well before Our Story's heading is
+       on screen. */
+    @supports (animation-timeline: view()) {
+      .rings__ring--left,
+      .rings__ring--right {
+        animation-duration: 1ms; /* overridden by the timeline; required syntax */
+        animation-fill-mode: both;
+        animation-timing-function: linear;
+        animation-timeline: view();
+        animation-range: entry 0% cover 40%;
+      }
+
+      .rings__ring--left {
+        animation-name: rings-converge-left;
+      }
+
+      .rings__ring--right {
+        animation-name: rings-converge-right;
+      }
+    }
+
+    /* The fallback, armed only when the script has confirmed the timeline is
+       unavailable. Apart to begin with, and played once when the block is
+       reached — never a scroll listener. */
+    .rings--fallback .rings__ring--left {
+      transform: translateX(-40px);
+    }
+
+    .rings--fallback .rings__ring--right {
+      transform: translateX(40px);
+    }
+
+    .rings--fallback.rings--play .rings__ring--left,
+    .rings--fallback.rings--play .rings__ring--right {
+      animation-duration: 900ms;
+      animation-fill-mode: both;
+      animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+
+    .rings--fallback.rings--play .rings__ring--left {
+      animation-name: rings-converge-left;
+    }
+
+    .rings--fallback.rings--play .rings__ring--right {
+      animation-name: rings-converge-right;
+    }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var s = document.querySelector('.rings');
+    if (!s) return;
+    /* Nothing to do where the browser drives it itself, and nothing to do when
+       motion is not wanted — in both cases the CSS above is already right. */
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.CSS && CSS.supports && CSS.supports('animation-timeline: view()')) return;
+    if (!('IntersectionObserver' in window)) return;
+
+    s.classList.add('rings--fallback');
+    var io = new IntersectionObserver(
+      function (entries) {
+        if (!entries.some(function (e) { return e.isIntersecting; })) return;
+        io.disconnect();
+        s.classList.add('rings--play');
+      },
+      { rootMargin: '0px 0px -20% 0px' },
+    );
+    io.observe(s);
+  })();
+</script>

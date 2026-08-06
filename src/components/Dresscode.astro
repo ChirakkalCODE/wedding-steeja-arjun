@@ -1,6 +1,11 @@
 ---
 import { Picture } from 'astro:assets';
 import { AVOID, GROUPS } from '../data/dresscode';
+/* The shoe detail, as a print laid beside the dress code. It was briefly a
+   full-bleed band above this section; a band that shallow read as a divider
+   rather than as a photograph, and the shoes belong next to the clothes. It
+   appears here and nowhere else — it is deliberately absent from gallery.ts. */
+import shoePhoto from '../assets/photos/gallery/EPK03357.jpg';
 /* Derived 1920px master, not the original — see prepare-media.mjs.
 
    The tilted frame against the yellow wall, and it is the right ground for this
@@ -102,6 +107,11 @@ const ILLUSTRATION: Record<string, { alt: string; paths: string[] }> = {
   </div>
 
   <div class="dress__inner">
+    {/* The selector and the print. Two columns above 1000px, one below — and
+        the print is second in the DOM either way, so on a narrow screen it
+        falls under the swatches rather than between the heading and the pills.
+    */}
+    <div class="dress__with-print">
     <div class="dress__group">
       <h3 class="sr-only" id="dress-group-label">Choose a guest group</h3>
 
@@ -177,6 +187,26 @@ const ILLUSTRATION: Record<string, { alt: string; paths: string[] }> = {
       </div>
 
       <p class="sr-only" role="status" data-copy-status></p>
+    </div>
+
+      {/* Laid on the page rather than printed into it. No reveal animation and
+          explicit dimensions, so the mount's box is reserved before the photo
+          lands and nothing moves when it does. */}
+      <figure class="dress__print">
+        <Picture
+          class="dress__print-photo"
+          src={shoePhoto}
+          formats={['avif', 'webp']}
+          widths={[260, 520]}
+          width={520}
+          height={416}
+          sizes="clamp(180px, 22vw, 260px)"
+          alt="Steeja's white trainers on the ledge, below the hem of her red checked dress."
+          loading="lazy"
+          decoding="async"
+        />
+        <figcaption class="dress__print-caption">the shoes made it too</figcaption>
+      </figure>
     </div>
 
     <div class="dress__avoid">
@@ -605,6 +635,72 @@ const ILLUSTRATION: Record<string, { alt: string; paths: string[] }> = {
       var(--color-muted) calc(50% + 0.5px),
       transparent calc(50% + 0.5px)
     );
+  }
+
+  /* -- the print ----------------------------------------------------------- */
+
+  .dress__with-print {
+    display: grid;
+    gap: clamp(2rem, 4vw, 3rem);
+    /* One column below 1000px, and the print is second in the DOM, so it lands
+       under the swatches rather than between the heading and the pills. */
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  @media (min-width: 1000px) {
+    .dress__with-print {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+  }
+
+  .dress__print {
+    /* The mount, not the photograph: shell all round, even on three sides and
+       roughly double at the foot, which is the proportion that reads as a
+       print rather than as a bordered image. */
+    width: clamp(180px, 22vw, 260px);
+    margin: 0;
+    padding: 10px 10px 22px;
+    background-color: var(--color-shell);
+    box-shadow: 0 10px 30px rgb(24 16 11 / 0.16);
+    /* Laid down slightly askew. Straightens on hover, and only where hovering
+       is a thing that happens — `any-hover: hover` keeps a phone from being
+       given a state it can enter and never leave. */
+    transform: rotate(-2.5deg);
+    transition: transform 300ms ease;
+  }
+
+  @media (any-hover: hover) {
+    .dress__print:hover {
+      transform: rotate(0deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dress__print {
+      transition: none;
+    }
+  }
+
+  .dress__print-photo {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* Near-square, so the shoe fills the frame instead of sitting in a wide
+       strip of concrete. */
+    aspect-ratio: 5 / 4;
+    object-fit: cover;
+    object-position: 38% 62%;
+  }
+
+  .dress__print-caption {
+    /* In the mount's bottom margin, where a caption on a print belongs. */
+    margin-top: 0.5rem;
+    font-family: var(--font-script);
+    font-size: 1.1rem;
+    line-height: 1.2;
+    text-align: center;
+    color: var(--color-muted);
   }
 
   .dress__avoid-note {
