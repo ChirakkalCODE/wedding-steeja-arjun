@@ -56,3 +56,16 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # The action's own default is 600000, and that is no longer enough.
+          # This deploy is a 16MB artifact of 199 mostly-image files, and the
+          # Pages service has been slow with it: 2m29s, then 8m41s, 9m00s and
+          # 10m11s on consecutive runs, and then a run that crossed the default
+          # and aborted with "Timeout reached" while the build itself had
+          # finished in 1m51s. Nothing about the site changed to cause that —
+          # the wait is on GitHub's side of the handover.
+          #
+          # 30 minutes, so a slow afternoon does not read as a broken deploy.
+          # It is a ceiling, not a delay: a fast publish still returns in
+          # seconds.
+          timeout: 1800000
