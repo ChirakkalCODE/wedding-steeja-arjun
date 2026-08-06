@@ -160,13 +160,30 @@ const alt =
        that cannot collide however the card's height changes. The fallback keeps
        this honest if the hero is ever used on a page without the card. */
     bottom: calc(var(--invite-overlap, 0px) + clamp(1.75rem, 5vw, 3rem));
-    /* `width`, not `max-width`, and that is the whole of the page's CLS.
-       Shrink-to-fit made the box as wide as its longest line, so when Instrument
-       Serif swapped in over the Georgia fallback the box resized and Chrome
-       recorded a shift — 0.004, small but not zero. Pinned, the box holds its
-       rect and only the glyphs inside it reflow. The value also keeps a long
-       line out from under the card's shadow on a wide screen. */
+    /* Both axes pinned, and that is the whole of the page's CLS.
+       -----------------------------------------------------------------------
+       The box is anchored by `bottom`, so anything that changes its size moves
+       its top edge and Chrome records a shift. Two things could:
+
+         · width — it was `max-width`, so shrink-to-fit made the box as wide as
+           its longest line, and that line's width changes when Instrument Serif
+           swaps in over the Georgia fallback;
+         · height — the meta line sits exactly on a wrap boundary (two lines at
+           320-390px, one from 768px up), so Inter arriving over the system
+           fallback can flip its line count and with it the box's height.
+
+       The second is why the shift survived pinning the width and came back
+       intermittently at 0.004: it only fires when the swap lands after first
+       paint. A fixed height with the content bottom-aligned settles it — the
+       rect is the same before and after the fonts arrive, whatever they do to
+       the text inside it. Generous enough for three meta lines on the narrowest
+       screen; on wider ones the spare height is transparent and above the type,
+       where nothing can see it. */
     width: min(28rem, calc(100% - clamp(3rem, 12vw, 8rem)));
+    height: 6.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
   }
 
   .hero__title {
