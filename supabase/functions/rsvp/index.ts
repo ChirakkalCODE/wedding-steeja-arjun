@@ -21,7 +21,23 @@
  *          (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected by the
  *           platform — do not set them yourself and do not commit them.)
  */
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+/**
+ * Through esm.sh, at one exact version, and both halves of that matter.
+ *
+ * This was `jsr:@supabase/supabase-js@2` and the deploy stopped resolving: the
+ * floating `@2` moved on to 2.112.2, whose JSR build declares a dependency on
+ * `@supabase/postgrest-js` 2.112.2 — a version that exists on JSR and was never
+ * published to npm, which is where that dependency has to come from. Nothing in
+ * this repository changed; the tag moved underneath it. That is the argument
+ * against a floating tag: the one thing it buys is upgrades nobody asked for,
+ * arriving on the day of a deploy.
+ *
+ * esm.sh resolves through npm, so the whole 2.111.0 set is there. The version
+ * is the one in package.json, so the browser's client (src/lib/supabase.ts, on
+ * /admin) and this function are the same library — worth keeping true when you
+ * next bump either one.
+ */
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.111.0';
 
 type ErrorCode =
   | 'captcha_failed'
